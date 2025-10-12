@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hyperrag.ai/schemas/memory.memorag.inputs.schema.json",
+  "title": "Memory MemoRAG MCP Tool Input Schema",
+  "description": "Input schema for the memory.memorag tool - episodic and semantic memory management",
+  "type": "object",
+  "required": ["tenant", "query", "lang"],
+  "properties": {
+    "tenant": {
+      "type": "string",
+      "description": "Tenant identifier for multi-tenant isolation",
+      "pattern": "^[a-zA-Z0-9_-]+$"
+    },
+    "query": {
+      "type": "string",
+      "description": "Query to search for relevant memories",
+      "minLength": 1,
+      "maxLength": 1000
+    },
+    "lang": {
+      "type": "string",
+      "enum": ["en", "fa"],
+      "description": "Language of the query"
+    },
+    "memory_type": {
+      "type": "string",
+      "enum": ["episodic", "semantic", "both"],
+      "description": "Type of memory to search",
+      "default": "both"
+    },
+    "max_results": {
+      "type": "integer",
+      "description": "Maximum number of memory results to return",
+      "minimum": 1,
+      "maximum": 100,
+      "default": 10
+    },
+    "similarity_threshold": {
+      "type": "number",
+      "description": "Minimum similarity score for memory retrieval",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "default": 0.7
+    },
+    "user_id": {
+      "type": "string",
+      "description": "User identifier to filter memories"
+    },
+    "session_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Session identifier to filter memories"
+    },
+    "time_range": {
+      "type": "object",
+      "description": "Time range to filter memories",
+      "properties": {
+        "start": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Start of time range"
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time",
+          "description": "End of time range"
+        }
+      }
+    },
+    "metadata_filter": {
+      "type": "object",
+      "description": "Additional metadata filters",
+      "additionalProperties": true
+    },
+    "include_content": {
+      "type": "boolean",
+      "description": "Whether to include full content in results",
+      "default": true
+    },
+    "sort_by": {
+      "type": "string",
+      "enum": ["relevance", "recency", "frequency"],
+      "description": "How to sort memory results",
+      "default": "relevance"
+    }
+  },
+  "additionalProperties": false
+}

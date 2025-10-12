@@ -1,0 +1,133 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'hyperrag-services'
+          static_configs:
+            - targets:
+              - 'ingestor:8000'
+              - 'normalizer:8001'
+              - 'retriever:8002'
+              - 'chunker:8003'
+              - 'embedder:8004'
+              - 'evaluator:8005'
+              - 'agent-orch:8006'
+              - 'policy:8007'
+              - 'costing:8008'
+              - 'pack-longrag:8009'
+              - 'memory-memorag:8010'
+              - 'reranker:8011'
+          scrape_interval: 15s
+
+        - job_name: 'hyperrag-infrastructure'
+          static_configs:
+            - targets:
+              - 'qdrant:6333'
+              - 'postgres:5432'
+              - 'redis:6379'
+              - 'nats:8222'
+              - 'minio:9000'
+              - 'neo4j:7474'
+          scrape_interval: 30s
+
+processors:
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  attributes:
+    actions:
+      - key: service.name
+        value: hyperrag-${SERVICE_NAME}
+        action: insert
+      - key: deployment.environment
+        value: ${DEPLOYMENT_ENV}
+        action: insert
+
+  resource:
+    attributes:
+      - key: service.namespace
+        value: hyperrag
+        action: insert
+      - key: service.version
+        from_attribute: service.version
+        action: insert
+
+  probabilistic_sampler:
+    hash_seed: 22
+    sampling_percentage: 25
+
+exporters:
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    namespace: hyperrag
+    const_labels:
+      environment: ${DEPLOYMENT_ENV}
+      version: ${SERVICE_VERSION}
+
+  jaeger:
+    endpoint: jaeger:14250
+    tls:
+      insecure: true
+
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
+    labels:
+      attributes:
+        service.name: "service_name"
+        deployment.environment: "deployment_environment"
+        service.version: "service_version"
+    format: json
+
+  otlp/elastic:
+    endpoint: apm:8200
+    tls:
+      insecure: true
+
+  logging:
+    loglevel: info
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, probabilistic_sampler, attributes, resource, batch]
+      exporters: [jaeger, otlp/elastic, logging]
+
+    metrics:
+      receivers: [otlp, prometheus]
+      processors: [memory_limiter, attributes, resource, batch]
+      exporters: [prometheus, logging]
+
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes, resource, batch]
+      exporters: [loki, logging]
+
+  extensions: []
+
+  telemetry:
+    logs:
+      level: info
+      development: false
+      encoding: json
+      outputPaths: ["stdout"]
+      errorOutputPaths: ["stderr"]
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8888

@@ -1,0 +1,189 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hyperrag.ai/schemas/cloudevents/security-events.schema.json",
+  "title": "Security Events CloudEvent Schema",
+  "description": "CloudEvent schema for security-related events in the HyperRAG system",
+  "type": "object",
+  "required": [
+    "specversion",
+    "id",
+    "source",
+    "type",
+    "time",
+    "datacontenttype",
+    "data"
+  ],
+  "properties": {
+    "specversion": {
+      "type": "string",
+      "const": "1.0",
+      "description": "CloudEvents specification version"
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this event"
+    },
+    "source": {
+      "type": "string",
+      "description": "Source system that generated this event",
+      "examples": [
+        "service/policy",
+        "service/normalizer",
+        "service/costing"
+      ]
+    },
+    "type": {
+      "type": "string",
+      "description": "Type of the event",
+      "enum": [
+        "security.policy.violation.v1",
+        "security.pii.detected.v1",
+        "security.budget.exceeded.v1",
+        "security.unauthorized.access.v1",
+        "security.suspicious.activity.v1",
+        "security.audit.log.v1"
+      ]
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when the event occurred"
+    },
+    "datacontenttype": {
+      "type": "string",
+      "const": "application/json",
+      "description": "Content type of the data payload"
+    },
+    "subject": {
+      "type": "string",
+      "description": "Subject of the event (user_id, session_id, etc.)"
+    },
+    "data": {
+      "type": "object",
+      "description": "Event-specific data payload",
+      "required": [
+        "tenant"
+      ],
+      "properties": {
+        "tenant": {
+          "type": "string",
+          "description": "Tenant identifier",
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "user_id": {
+          "type": "string",
+          "description": "User identifier"
+        },
+        "session_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Session identifier"
+        },
+        "ip_address": {
+          "type": "string",
+          "format": "ipv4",
+          "description": "IP address of the request"
+        },
+        "user_agent": {
+          "type": "string",
+          "description": "User agent string"
+        },
+        "operation": {
+          "type": "string",
+          "description": "Operation that was attempted"
+        },
+        "resource": {
+          "type": "string",
+          "description": "Resource that was accessed"
+        },
+        "decision": {
+          "type": "string",
+          "enum": ["allow", "deny"],
+          "description": "Policy decision"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Reason for the decision"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"],
+          "description": "Severity level of the security event"
+        },
+        "pii_entities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "entity_type": {"type": "string"},
+              "start": {"type": "integer"},
+              "end": {"type": "integer"},
+              "score": {"type": "number"},
+              "text": {"type": "string"}
+            }
+          },
+          "description": "Detected PII entities"
+        },
+        "pii_count": {
+          "type": "integer",
+          "description": "Number of PII entities detected"
+        },
+        "budget_limit": {
+          "type": "number",
+          "description": "Budget limit that was exceeded"
+        },
+        "current_usage": {
+          "type": "number",
+          "description": "Current usage amount"
+        },
+        "usage_percentage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Usage percentage"
+        },
+        "alert_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Alert threshold that was triggered"
+        },
+        "suspicious_patterns": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Patterns that triggered suspicion"
+        },
+        "request_count": {
+          "type": "integer",
+          "description": "Number of requests in time window"
+        },
+        "time_window_seconds": {
+          "type": "integer",
+          "description": "Time window for rate limiting"
+        },
+        "rate_limit": {
+          "type": "number",
+          "description": "Rate limit that was exceeded"
+        },
+        "jwt_token_hash": {
+          "type": "string",
+          "description": "Hash of the JWT token for tracking"
+        },
+        "correlation_id": {
+          "type": "string",
+          "description": "Correlation ID for request tracing"
+        },
+        "trace_id": {
+          "type": "string",
+          "description": "Distributed trace identifier"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Additional metadata about the security event"
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}
