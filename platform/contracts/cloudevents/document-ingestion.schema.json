@@ -1,0 +1,223 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hyperrag.ai/schemas/cloudevents/document-ingestion.schema.json",
+  "title": "Document Ingestion CloudEvent Schema",
+  "description": "CloudEvent schema for document ingestion events in the HyperRAG system",
+  "type": "object",
+  "required": [
+    "specversion",
+    "id",
+    "source",
+    "type",
+    "time",
+    "datacontenttype",
+    "data"
+  ],
+  "properties": {
+    "specversion": {
+      "type": "string",
+      "const": "1.0",
+      "description": "CloudEvents specification version"
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this event"
+    },
+    "source": {
+      "type": "string",
+      "description": "Source system that generated this event",
+      "examples": [
+        "gitlab/webhook",
+        "manual/upload",
+        "scheduled/ingestion",
+        "api/ingestor"
+      ]
+    },
+    "type": {
+      "type": "string",
+      "description": "Type of the event",
+      "enum": [
+        "doc.ingested.v1",
+        "doc.processing.started.v1",
+        "doc.processing.completed.v1",
+        "doc.processing.failed.v1",
+        "doc.chunked.v1",
+        "doc.embedded.v1",
+        "doc.indexed.v1"
+      ]
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when the event occurred"
+    },
+    "datacontenttype": {
+      "type": "string",
+      "const": "application/json",
+      "description": "Content type of the data payload"
+    },
+    "subject": {
+      "type": "string",
+      "description": "Subject of the event (usually the document ID)"
+    },
+    "data": {
+      "type": "object",
+      "description": "Event-specific data payload",
+      "required": [
+        "doc_id",
+        "version",
+        "uri_raw",
+        "content_type",
+        "lang",
+        "tenant"
+      ],
+      "properties": {
+        "doc_id": {
+          "type": "string",
+          "description": "Unique document identifier",
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "version": {
+          "type": "string",
+          "description": "Document version identifier",
+          "pattern": "^v[0-9]+$"
+        },
+        "uri_raw": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI to the raw document in object storage",
+          "examples": [
+            "s3://raw/tenant/project/doc.pdf",
+            "minio://raw/tenant/project/doc.txt"
+          ]
+        },
+        "uri_clean": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI to the cleaned document (after PII removal)"
+        },
+        "uri_processed": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI to the processed document (after chunking/embedding)"
+        },
+        "content_type": {
+          "type": "string",
+          "description": "MIME type of the document",
+          "examples": [
+            "application/pdf",
+            "text/plain",
+            "text/markdown",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          ]
+        },
+        "lang": {
+          "type": "string",
+          "enum": ["en", "fa"],
+          "description": "Primary language of the document"
+        },
+        "tenant": {
+          "type": "string",
+          "description": "Tenant identifier for multi-tenant isolation",
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "project": {
+          "type": "string",
+          "description": "Project identifier within the tenant",
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "acl": {
+          "type": "array",
+          "description": "Access control list for the document",
+          "items": {
+            "type": "string",
+            "examples": [
+              "role:pm",
+              "team:ml",
+              "user:john.doe",
+              "group:engineering"
+            ]
+          }
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "SHA256 hash of the raw document for integrity verification"
+        },
+        "file_size": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Size of the document in bytes"
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable title of the document"
+        },
+        "author": {
+          "type": "string",
+          "description": "Author of the document"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the document was originally created"
+        },
+        "modified_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the document was last modified"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Tags for categorizing the document"
+        },
+        "processing_status": {
+          "type": "string",
+          "enum": ["pending", "processing", "completed", "failed"],
+          "description": "Current processing status of the document"
+        },
+        "error_message": {
+          "type": "string",
+          "description": "Error message if processing failed"
+        },
+        "chunk_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of chunks created from the document"
+        },
+        "embedding_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of embeddings generated for the document"
+        },
+        "processing_metadata": {
+          "type": "object",
+          "description": "Additional metadata about the processing",
+          "properties": {
+            "chunker_model": {
+              "type": "string",
+              "description": "Model used for chunking"
+            },
+            "embedder_model": {
+              "type": "string",
+              "description": "Model used for embedding"
+            },
+            "processing_time_ms": {
+              "type": "integer",
+              "description": "Total processing time in milliseconds"
+            },
+            "token_count": {
+              "type": "integer",
+              "description": "Total number of tokens in the document"
+            }
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

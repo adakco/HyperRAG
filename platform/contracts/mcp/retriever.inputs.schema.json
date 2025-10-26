@@ -1,0 +1,103 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hyperrag.ai/schemas/retriever.inputs.schema.json",
+  "title": "Retriever MCP Tool Input Schema",
+  "description": "Input schema for the retriever.mcp tool - hybrid search with RRF and re-ranking",
+  "type": "object",
+  "required": ["query", "lang", "tenant"],
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "The search query text",
+      "minLength": 1,
+      "maxLength": 1000
+    },
+    "lang": {
+      "type": "string",
+      "enum": ["en", "fa"],
+      "description": "Language of the query and expected results"
+    },
+    "tenant": {
+      "type": "string",
+      "description": "Tenant identifier for multi-tenant isolation",
+      "pattern": "^[a-zA-Z0-9_-]+$"
+    },
+    "project": {
+      "type": "string",
+      "description": "Project identifier within the tenant",
+      "pattern": "^[a-zA-Z0-9_-]+$"
+    },
+    "k_dense": {
+      "type": "integer",
+      "description": "Number of dense vector results to retrieve",
+      "minimum": 1,
+      "maximum": 100,
+      "default": 20
+    },
+    "k_sparse": {
+      "type": "integer",
+      "description": "Number of sparse vector results to retrieve",
+      "minimum": 1,
+      "maximum": 100,
+      "default": 20
+    },
+    "k_final": {
+      "type": "integer",
+      "description": "Final number of results after RRF and re-ranking",
+      "minimum": 1,
+      "maximum": 50,
+      "default": 10
+    },
+    "rerank": {
+      "type": "boolean",
+      "description": "Whether to apply re-ranking to the results",
+      "default": true
+    },
+    "filters": {
+      "type": "object",
+      "description": "Additional filters to apply to the search",
+      "properties": {
+        "content_type": {
+          "type": "string",
+          "description": "Filter by document content type"
+        },
+        "date_range": {
+          "type": "object",
+          "properties": {
+            "start": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "end": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "search_mode": {
+      "type": "string",
+      "enum": ["fast", "balanced", "thorough"],
+      "description": "Search quality vs speed trade-off",
+      "default": "balanced"
+    },
+    "include_metadata": {
+      "type": "boolean",
+      "description": "Whether to include document metadata in results",
+      "default": true
+    },
+    "include_content": {
+      "type": "boolean",
+      "description": "Whether to include chunk content in results",
+      "default": true
+    }
+  },
+  "additionalProperties": false
+}

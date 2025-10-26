@@ -1,0 +1,152 @@
+# Agent Orchestrator Interface Contract
+# Abstraction layer for LangGraph/Temporal implementations
+
+version: "1.0"
+description: "MCP-Native Agentic HyperRAG Orchestrator Interface"
+
+# Core methods that any orchestrator implementation must support
+methods:
+  - name: start_session
+    description: "Initialize a new agent session with query and context"
+    inputs:
+      session_id: string
+      query: string
+      lang: string  # 'en' or 'fa'
+      tenant: string
+      token_budget: integer
+      max_steps: integer
+      traceparent: string
+    outputs:
+      session_id: string
+      status: string
+      trace_id: string
+
+  - name: invoke_tool
+    description: "Execute an MCP tool with input parameters"
+    inputs:
+      session_id: string
+      tool_name: string
+      input: object
+      traceparent: string
+    outputs:
+      output: object
+      cost: number
+      duration_ms: integer
+      status: string
+
+  - name: evaluate_step
+    description: "Evaluate the output of a step against policies"
+    inputs:
+      session_id: string
+      step_output: object
+      policy_context: object
+    outputs:
+      passed: boolean
+      score: number
+      feedback: string
+      violations: array
+
+  - name: finalize_response
+    description: "Complete the session and generate final response"
+    inputs:
+      session_id: string
+      citations: array
+      cost: number
+      trace_id: string
+    outputs:
+      final_response: string
+      total_cost: number
+      success: boolean
+
+# Resilience and reliability requirements
+resilience:
+  circuit_breaker:
+    enabled: true
+    failure_threshold: 5
+    recovery_timeout: 60s
+    half_open_max_calls: 3
+
+  retry_policy:
+    strategy: exponential_backoff
+    max_retries: 3
+    initial_delay: 1s
+    max_delay: 30s
+    multiplier: 2.0
+
+  timeout_per_step: 10s
+  timeout_per_session: 300s
+
+# Security requirements
+security:
+  authentication:
+    required: true
+    method: jwt
+    claims: ["tenant", "role", "project", "lang"]
+
+  authorization:
+    policy_engine: opa
+    default_action: deny
+    required_scopes: ["agent:execute"]
+
+# Observability requirements
+observability:
+  tracing:
+    required: true
+    format: w3c_tracecontext
+    sampling_rate: 1.0
+
+  metrics:
+    required: true
+    format: prometheus
+    labels: ["tenant", "lang", "tool_name", "status"]
+
+  logging:
+    required: true
+    format: structured_json
+    level: info
+    fields: ["session_id", "trace_id", "tenant", "lang"]
+
+# Tool catalog requirements
+tool_catalog:
+  discovery:
+    method: mcp_protocol
+    health_check_interval: 30s
+
+  validation:
+    schema_validation: required
+    version_compatibility: semver
+    security_policy: required
+
+# Multi-language support
+i18n:
+  supported_languages: ["en", "fa"]
+  default_language: "en"
+  rtl_support: true
+  text_processing:
+    persian:
+      normalization: required
+      tokenization: required
+      embedding_model: "HooshvareLab/bert-fa-base-uncased"
+    english:
+      embedding_model: "text-embedding-3-large"
+
+# Performance requirements
+performance:
+  slo:
+    p95_latency_fast: 1.5s
+    p95_latency_secure: 3.0s
+    success_rate: 0.95
+    cost_per_query: 0.002
+
+  resource_limits:
+    max_concurrent_sessions: 100
+    max_memory_per_session: 512MB
+    max_cpu_per_session: 0.5
+
+# Implementation notes
+implementation_notes:
+  - "This interface should be implemented by both LangGraph and Temporal orchestrators"
+  - "All implementations must maintain backward compatibility"
+  - "Tool failures should be handled gracefully with fallback strategies"
+  - "Session state should be persisted for recovery and debugging"
+  - "Cost tracking should be accurate to 6 decimal places"

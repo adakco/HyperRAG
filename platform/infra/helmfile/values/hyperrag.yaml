@@ -1,0 +1,328 @@
+global:
+  environment: development
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: standard
+
+common:
+  labels:
+    app: hyperrag
+  annotations: {}
+  podAnnotations: {}
+  podLabels: {}
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+
+ingestor:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: hyperrag/ingestor
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8000
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+normalizer:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: hyperrag/normalizer
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8001
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+retriever:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: hyperrag/retriever
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8002
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+
+chunker:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: hyperrag/chunker
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8003
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+embedder:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: hyperrag/embedder
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8004
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 2Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+
+evaluator:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: hyperrag/evaluator
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8005
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+
+agentOrch:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: hyperrag/agent-orch
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8006
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+policy:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: hyperrag/policy
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8007
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+costing:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: hyperrag/costing
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8008
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+packLongrag:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: hyperrag/pack-longrag
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8009
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+
+memoryMemorag:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: hyperrag/memory-memorag
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8010
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+
+reranker:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: hyperrag/reranker
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8011
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: api.hyperrag.ai
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: hyperrag-tls
+      hosts:
+        - api.hyperrag.ai
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+persistence:
+  enabled: true
+  storageClass: standard
+  size: 10Gi
+
+config:
+  logLevel: info
+  tokenBudget: 4000
+  maxSteps: 10
+  timeoutSeconds: 300
+
+secrets:
+  create: true
+  jwtSecret: ""
+  postgresPassword: ""
+  minioAccessKey: ""
+  minioSecretKey: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+rbac:
+  create: true
+  rules:
+    - apiGroups: [""]
+      resources: ["pods", "services"]
+      verbs: ["get", "list", "watch"]
+
+networkPolicy:
+  enabled: true
+  ingressRules:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: hyperrag
+  egressRules:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: hyperrag
+
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 15s
+  prometheusRule:
+    enabled: true
+    rules:
+      - alert: HighLatency
+        expr: http_request_duration_seconds{quantile="0.95"} > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          description: "High latency detected"
+
+security:
+  mtls:
+    enabled: true
+    mode: STRICT
+  securityContext:
+    enabled: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000

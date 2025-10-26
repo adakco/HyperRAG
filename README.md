@@ -22,8 +22,8 @@ This system implements a three-phase approach:
 
 ### Prerequisites
 
-- Docker and Docker Compose
-- Python 3.9+
+- Docker and Docker Compose (for Docker mode)
+- Python 3.9+ (for Host mode)
 - Git
 
 ### Installation
@@ -34,37 +34,75 @@ This system implements a three-phase approach:
    cd Hyper-RAG
    ```
 
-2. **Start all services**:
+2. **Choose your deployment mode**:
+
+   #### Option A: Docker Mode (Recommended for development)
    ```bash
    ./start-services.sh
    ```
 
+   #### Option B: Host Mode (Recommended for production)
+   ```bash
+   # Make sure your infrastructure is running on 192.168.2.23
+   # Then start services directly on host:
+   ./start-services-host.sh
+   ```
+
 3. **Verify services are running**:
+
+   **Docker Mode:**
    ```bash
    # Check service health
    curl http://localhost:8000/health  # Ingestor
-   curl http://localhost:8001/health  # Normalizer
+   curl http://localhost:8001/health  # Chunker
    curl http://localhost:8002/health  # Retriever
-   curl http://localhost:8003/health  # Chunker
    curl http://localhost:8004/health  # Embedder
+   curl http://localhost:8005/health  # Evaluator
+   curl http://localhost:8006/health  # Agent-Orch
+   ```
+
+   **Host Mode:**
+   ```bash
+   # Services run on the same ports but connect to infrastructure on 192.168.2.23
+   curl http://localhost:8000/health  # Ingestor
+   curl http://localhost:8001/health  # Chunker
+   curl http://localhost:8002/health  # Retriever
+   curl http://localhost:8004/health  # Embedder
+   curl http://localhost:8005/health  # Evaluator
+   curl http://localhost:8006/health  # Agent-Orch
    ```
 
 ### Service URLs
 
+#### Application Services (Host Mode)
 | Service | URL | Description |
 |---------|-----|-------------|
 | Ingestor API | http://localhost:8000 | Document ingestion |
-| Normalizer API | http://localhost:8001 | PII removal & text normalization |
+| Chunker API | http://localhost:8001 | Intelligent text chunking |
 | Retriever API | http://localhost:8002 | Hybrid search & re-ranking |
-| Chunker API | http://localhost:8003 | Intelligent text chunking |
 | Embedder API | http://localhost:8004 | Vector embedding generation |
-| MinIO Console | http://localhost:9001 | Object storage (admin/password123) |
-| Qdrant Dashboard | http://localhost:6333/dashboard | Vector database |
-| Neo4j Browser | http://localhost:7474 | Knowledge graph (neo4j/password123) |
-| Grafana | http://localhost:3000 | Monitoring (admin/admin123) |
-| Prometheus | http://localhost:9090 | Metrics |
-| Jaeger | http://localhost:16686 | Distributed tracing |
-| Langfuse | http://localhost:3001 | AI quality monitoring |
+| Evaluator API | http://localhost:8005 | RAGAS quality assessment |
+| Agent-Orch API | http://localhost:8006 | MCP-Native agent orchestration |
+| Normalizer API | http://localhost:8007 | PII removal & text normalization |
+| Costing API | http://localhost:8008 | Cost tracking & billing |
+| Reranker API | http://localhost:8009 | Cross-encoder re-ranking |
+| Pack-LRAG API | http://localhost:8010 | Long-context packing |
+| Policy API | http://localhost:8011 | Security & access control |
+| Memory-MCP API | http://localhost:8012 | Episodic memory management |
+
+#### Infrastructure Services (Running on 192.168.2.23)
+| Service | URL | Description |
+|---------|-----|-------------|
+| MinIO Console | http://192.168.2.23:9090 | Object storage (admin/password123) |
+| Qdrant Dashboard | http://192.168.2.23:6333/dashboard | Vector database |
+| Neo4j Browser | http://192.168.2.23:7474 | Knowledge graph (neo4j/Adakpro123) |
+| Grafana | http://192.168.2.23:3001 | Monitoring dashboard |
+| Prometheus | http://192.168.2.23:9095 | Metrics collection |
+| Tempo | http://192.168.2.23:3200 | Distributed tracing |
+| Loki | http://192.168.2.23:3100 | Log aggregation |
+| Langfuse | http://192.168.2.23:3000 | AI quality monitoring |
+| PostgreSQL | 192.168.2.23:5432 | Metadata database (langfuse/Adakpro123) |
+| NATS Monitor | http://192.168.2.23:8222 | Message queue monitoring |
 
 ## 📚 Usage Examples
 
@@ -321,6 +359,20 @@ pytest tests/
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 📚 Documentation
+
+### Complete Service Documentation
+
+- **[Persian Documentation](docs/Persian-Documentation.md)** - مستند کامل فارسی شامل توضیح همه سرویس‌ها
+- **[Services Documentation](docs/Services-Documentation.md)** - Technical reference برای تمام سرویس‌ها
+- **[Testing Guide](docs/Service-Testing-Guide.md)** - راهنمای تست سرویس‌ها و pipeline
+
+### Architecture and Development
+
+- **[Architecture](docs/Architecture.md)** - معماری کلی سیستم
+- **[Technical Spec](docs/Technical-Spec.md)** - مشخصات فنی
+- **[Development Guide](docs/DEVELOPMENT.md)** - راهنمای توسعه
 
 ## 🆘 Support
 

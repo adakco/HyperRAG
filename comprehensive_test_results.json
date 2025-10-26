@@ -1,0 +1,484 @@
+{
+  "health_checks": {
+    "ingestor": {
+      "status": "healthy",
+      "response_time": 0.09853315353393555,
+      "data": {
+        "status": "healthy",
+        "service": "ingestor"
+      }
+    },
+    "normalizer": {
+      "status": "healthy",
+      "response_time": 0.04920172691345215,
+      "data": {
+        "status": "healthy",
+        "service": "normalizer"
+      }
+    },
+    "retriever": {
+      "status": "healthy",
+      "response_time": 0.09822583198547363,
+      "data": {
+        "status": "healthy",
+        "service": "retriever"
+      }
+    },
+    "chunker": {
+      "status": "healthy",
+      "response_time": 0.05840611457824707,
+      "data": {
+        "status": "healthy",
+        "service": "chunker"
+      }
+    },
+    "embedder": {
+      "status": "healthy",
+      "response_time": 0.06139802932739258,
+      "data": {
+        "status": "healthy",
+        "service": "embedder"
+      }
+    },
+    "evaluator": {
+      "status": "healthy",
+      "response_time": 0.11393308639526367,
+      "data": {
+        "status": "healthy",
+        "service": "evaluator"
+      }
+    },
+    "agent_orch": {
+      "status": "healthy",
+      "response_time": 0.04953289031982422,
+      "data": {
+        "status": "healthy",
+        "service": "agent-orch"
+      }
+    },
+    "policy": {
+      "status": "healthy",
+      "response_time": 0.06274724006652832,
+      "data": {
+        "status": "healthy",
+        "service": "policy"
+      }
+    },
+    "costing": {
+      "status": "healthy",
+      "response_time": 0.04201912879943848,
+      "data": {
+        "status": "healthy",
+        "service": "costing"
+      }
+    },
+    "pack_longrag": {
+      "status": "healthy",
+      "response_time": 0.06113386154174805,
+      "data": {
+        "status": "healthy",
+        "service": "pack.longrag"
+      }
+    },
+    "memory_memorag": {
+      "status": "healthy",
+      "response_time": 0.052999258041381836,
+      "data": {
+        "status": "healthy",
+        "service": "memory.memorag"
+      }
+    },
+    "reranker": {
+      "status": "healthy",
+      "response_time": 0.030310869216918945,
+      "data": {
+        "status": "healthy",
+        "service": "reranker"
+      }
+    }
+  },
+  "functional_tests": {
+    "ingestion_english": {
+      "status": "success",
+      "doc_id": "test-comprehensive-english-1761399928",
+      "version": 1761387328,
+      "response_time": 0.1253199577331543,
+      "data": {
+        "doc_id": "test-comprehensive-english-1761399928",
+        "version": 1761387328,
+        "status": "ingested",
+        "uri_raw": "s3://raw/test/comprehensive-test/test-comprehensive-english-1761399928/1761387328",
+        "sha256": "21b4ec8de325b9221220948b2b41de5b2a03a18cb16ecabcac3fc08251cdffc7",
+        "file_size": 1794,
+        "trace_id": "234565663496647170819289519250514192852"
+      }
+    },
+    "ingestion_persian": {
+      "status": "success",
+      "doc_id": "test-comprehensive-persian-1761399928",
+      "version": 1761387328,
+      "response_time": 0.05502510070800781,
+      "data": {
+        "doc_id": "test-comprehensive-persian-1761399928",
+        "version": 1761387328,
+        "status": "ingested",
+        "uri_raw": "s3://raw/test/comprehensive-test/test-comprehensive-persian-1761399928/1761387328",
+        "sha256": "2ac172a04c98ca13268f46de094930811693a900d14fe5e2973acf36c9b16d6c",
+        "file_size": 2403,
+        "trace_id": "88505403193675017449383493893648032725"
+      }
+    },
+    "chunker": {
+      "status": "healthy",
+      "data": {
+        "status": "healthy",
+        "service": "chunker"
+      }
+    },
+    "retrieval_english_0": {
+      "status": "success",
+      "query": "What is HyperRAG?",
+      "results_count": 0,
+      "avg_score": 0.0,
+      "response_time": 6.34868597984314,
+      "data": {
+        "results": [],
+        "metadata": {
+          "total_results": 0,
+          "search_time_ms": 6268.83602142334,
+          "rerank_time_ms": 6268.836975097656,
+          "dense_results": 0,
+          "sparse_results": 0,
+          "rerank_applied": true,
+          "search_mode": "balanced",
+          "query_embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+          "rerank_model": "cross-encoder/ms-marco-MiniLM-L-6-v2"
+        },
+        "cost": {
+          "embedding_cost": 0.0001,
+          "search_cost": 0.0,
+          "rerank_cost": 0.0,
+          "total_cost": 0.0001
+        }
+      }
+    },
+    "retrieval_english_1": {
+      "status": "success",
+      "query": "What are the key features of HyperRAG?",
+      "results_count": 0,
+      "avg_score": 0.0,
+      "response_time": 0.3151359558105469,
+      "data": {
+        "results": [],
+        "metadata": {
+          "total_results": 0,
+          "search_time_ms": 281.7552089691162,
+          "rerank_time_ms": 281.7552089691162,
+          "dense_results": 0,
+          "sparse_results": 0,
+          "rerank_applied": true,
+          "search_mode": "balanced",
+          "query_embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+          "rerank_model": "cross-encoder/ms-marco-MiniLM-L-6-v2"
+        },
+        "cost": {
+          "embedding_cost": 0.0001,
+          "search_cost": 0.0,
+          "rerank_cost": 0.0,
+          "total_cost": 0.0001
+        }
+      }
+    },
+    "retrieval_english_2": {
+      "status": "success",
+      "query": "How many microservices does HyperRAG have?",
+      "results_count": 0,
+      "avg_score": 0.0,
+      "response_time": 0.11804986000061035,
+      "data": {
+        "results": [],
+        "metadata": {
+          "total_results": 0,
+          "search_time_ms": 110.10217666625977,
+          "rerank_time_ms": 110.10313034057617,
+          "dense_results": 0,
+          "sparse_results": 0,
+          "rerank_applied": true,
+          "search_mode": "balanced",
+          "query_embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+          "rerank_model": "cross-encoder/ms-marco-MiniLM-L-6-v2"
+        },
+        "cost": {
+          "embedding_cost": 0.0001,
+          "search_cost": 0.0,
+          "rerank_cost": 0.0,
+          "total_cost": 0.0001
+        }
+      }
+    },
+    "retrieval_english_3": {
+      "status": "success",
+      "query": "What is the performance of HyperRAG?",
+      "results_count": 0,
+      "avg_score": 0.0,
+      "response_time": 0.17481589317321777,
+      "data": {
+        "results": [],
+        "metadata": {
+          "total_results": 0,
+          "search_time_ms": 161.1630916595459,
+          "rerank_time_ms": 161.1630916595459,
+          "dense_results": 0,
+          "sparse_results": 0,
+          "rerank_applied": true,
+          "search_mode": "balanced",
+          "query_embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+          "rerank_model": "cross-encoder/ms-marco-MiniLM-L-6-v2"
+        },
+        "cost": {
+          "embedding_cost": 0.0001,
+          "search_cost": 0.0,
+          "rerank_cost": 0.0,
+          "total_cost": 0.0001
+        }
+      }
+    },
+    "retrieval_persian_0": {
+      "status": "success",
+      "query": "\u0647\u0627\u06cc\u067e\u0631\u0631\u06af \u0686\u06cc\u0633\u062a\u061f",
+      "results_count": 0,
+      "avg_score": 0.0,
+      "response_time": 0.1267561912536621,
+      "data": {
+        "results": [],
+        "metadata": {
+          "total_results": 0,
+          "search_time_ms": 107.23185539245605,
+          "rerank_time_ms": 107.23376274108887,
+          "dense_results": 0,
+          "sparse_results": 0,
+          "rerank_applied": true,
+          "search_mode": "balanced",
+          "query_embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+          "rerank_model": "cross-encoder/ms-marco-MiniLM-L-6-v2"
+        },
+        "cost": {
+          "embedding_cost": 0.0001,
+          "search_cost": 0.0,
+          "rerank_cost": 0.0,
+          "total_cost": 0.0001
+        }
+      }
+    },
+    "retrieval_persian_1": {
+      "status": "success",
+      "query": "\u0648\u06cc\u0698\u06af\u06cc\u200c\u0647\u0627\u06cc \u06a9\u0644\u06cc\u062f\u06cc \u0647\u0627\u06cc\u067e\u0631\u0631\u06af \u0686\u06cc\u0633\u062a\u061f",
+      "results_count": 0,
+      "avg_score": 0.0,
+      "response_time": 0.09870314598083496,
+      "data": {
+        "results": [],
+        "metadata": {
+          "total_results": 0,
+          "search_time_ms": 88.1798267364502,
+          "rerank_time_ms": 88.1810188293457,
+          "dense_results": 0,
+          "sparse_results": 0,
+          "rerank_applied": true,
+          "search_mode": "balanced",
+          "query_embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+          "rerank_model": "cross-encoder/ms-marco-MiniLM-L-6-v2"
+        },
+        "cost": {
+          "embedding_cost": 0.0001,
+          "search_cost": 0.0,
+          "rerank_cost": 0.0,
+          "total_cost": 0.0001
+        }
+      }
+    },
+    "retrieval_persian_2": {
+      "status": "success",
+      "query": "\u0647\u0627\u06cc\u067e\u0631\u0631\u06af \u0686\u0646\u062f \u0645\u06cc\u06a9\u0631\u0648\u0633\u0631\u0648\u06cc\u0633 \u062f\u0627\u0631\u062f\u061f",
+      "results_count": 0,
+      "avg_score": 0.0,
+      "response_time": 0.07587099075317383,
+      "data": {
+        "results": [],
+        "metadata": {
+          "total_results": 0,
+          "search_time_ms": 64.70799446105957,
+          "rerank_time_ms": 64.70799446105957,
+          "dense_results": 0,
+          "sparse_results": 0,
+          "rerank_applied": true,
+          "search_mode": "balanced",
+          "query_embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+          "rerank_model": "cross-encoder/ms-marco-MiniLM-L-6-v2"
+        },
+        "cost": {
+          "embedding_cost": 0.0001,
+          "search_cost": 0.0,
+          "rerank_cost": 0.0,
+          "total_cost": 0.0001
+        }
+      }
+    },
+    "retrieval_persian_3": {
+      "status": "success",
+      "query": "\u0639\u0645\u0644\u06a9\u0631\u062f \u0647\u0627\u06cc\u067e\u0631\u0631\u06af \u0686\u06af\u0648\u0646\u0647 \u0627\u0633\u062a\u061f",
+      "results_count": 0,
+      "avg_score": 0.0,
+      "response_time": 0.049154043197631836,
+      "data": {
+        "results": [],
+        "metadata": {
+          "total_results": 0,
+          "search_time_ms": 41.5189266204834,
+          "rerank_time_ms": 41.519880294799805,
+          "dense_results": 0,
+          "sparse_results": 0,
+          "rerank_applied": true,
+          "search_mode": "balanced",
+          "query_embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+          "rerank_model": "cross-encoder/ms-marco-MiniLM-L-6-v2"
+        },
+        "cost": {
+          "embedding_cost": 0.0001,
+          "search_cost": 0.0,
+          "rerank_cost": 0.0,
+          "total_cost": 0.0001
+        }
+      }
+    },
+    "evaluation_0": {
+      "status": "success",
+      "overall_score": 0.5360152259469032,
+      "passed": false,
+      "response_time": 12.113147974014282,
+      "data": {
+        "session_id": null,
+        "doc_id": null,
+        "version": null,
+        "lang": "en",
+        "tenant": "test",
+        "results": [
+          {
+            "metric_name": "faithfulness",
+            "score": 0.7068437874317168,
+            "threshold": 0.8,
+            "passed": false,
+            "explanation": "Measures how well the answer is supported by the retrieved contexts"
+          },
+          {
+            "metric_name": "answer_relevancy",
+            "score": 0.7273367047309875,
+            "threshold": 0.8,
+            "passed": false,
+            "explanation": "Measures how relevant the answer is to the query"
+          },
+          {
+            "metric_name": "context_precision",
+            "score": 0.7098804116249084,
+            "threshold": 0.8,
+            "passed": false,
+            "explanation": "Measures the precision of retrieved contexts"
+          },
+          {
+            "metric_name": "context_recall",
+            "score": 0.0,
+            "threshold": 0.8,
+            "passed": false,
+            "explanation": "Measures how well the contexts cover the ground truth"
+          }
+        ],
+        "overall_score": 0.5360152259469032,
+        "passed": false,
+        "processing_time_ms": 11672
+      }
+    },
+    "evaluation_1": {
+      "status": "success",
+      "overall_score": 0.47909755140542987,
+      "passed": false,
+      "response_time": 1.3780958652496338,
+      "data": {
+        "session_id": null,
+        "doc_id": null,
+        "version": null,
+        "lang": "fa",
+        "tenant": "test",
+        "results": [
+          {
+            "metric_name": "faithfulness",
+            "score": 0.7157406461238861,
+            "threshold": 0.8,
+            "passed": false,
+            "explanation": "Measures how well the answer is supported by the retrieved contexts"
+          },
+          {
+            "metric_name": "answer_relevancy",
+            "score": 0.5393633842468262,
+            "threshold": 0.8,
+            "passed": false,
+            "explanation": "Measures how relevant the answer is to the query"
+          },
+          {
+            "metric_name": "context_precision",
+            "score": 0.6612861752510071,
+            "threshold": 0.8,
+            "passed": false,
+            "explanation": "Measures the precision of retrieved contexts"
+          },
+          {
+            "metric_name": "context_recall",
+            "score": 0.0,
+            "threshold": 0.8,
+            "passed": false,
+            "explanation": "Measures how well the contexts cover the ground truth"
+          }
+        ],
+        "overall_score": 0.47909755140542987,
+        "passed": false,
+        "processing_time_ms": 1074
+      }
+    },
+    "agent_session": {
+      "status": "success",
+      "session_id": "aeedf68c-829d-4888-96b4-15653c8779c0",
+      "response_time": 0.2647888660430908,
+      "data": {
+        "session_id": "aeedf68c-829d-4888-96b4-15653c8779c0",
+        "status": "started",
+        "message": "Agent session started successfully"
+      }
+    },
+    "costing": {
+      "status": "healthy",
+      "data": {
+        "status": "healthy",
+        "service": "costing"
+      }
+    },
+    "memory": {
+      "status": "healthy",
+      "data": {
+        "status": "healthy",
+        "service": "memory.memorag"
+      }
+    }
+  },
+  "performance_metrics": {
+    "healthy_services": 12,
+    "total_services": 12,
+    "health_percentage": 100.0,
+    "successful_tests": 13,
+    "total_tests": 16,
+    "success_percentage": 81.25,
+    "average_response_time": 1.6341192172123835,
+    "total_test_duration": 0
+  },
+  "errors": [],
+  "start_time": "2025-10-25 13:45:27.260460",
+  "end_time": "2025-10-25 13:45:54.449540"
+}

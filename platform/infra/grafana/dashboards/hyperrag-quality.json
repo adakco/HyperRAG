@@ -1,0 +1,128 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "HyperRAG Quality Metrics",
+    "tags": ["hyperrag", "quality"],
+    "style": "dark",
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Faithfulness Score",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "avg(hyperrag_evaluation_score{metric=\"faithfulness\"}) by (lang, tenant)",
+            "legendFormat": "{{lang}} - {{tenant}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 1,
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 0.8},
+                {"color": "green", "value": 0.9}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Answer Relevancy Score",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "avg(hyperrag_evaluation_score{metric=\"answer_relevancy\"}) by (lang, tenant)",
+            "legendFormat": "{{lang}} - {{tenant}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 1,
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 0.8},
+                {"color": "green", "value": 0.9}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Context Precision Score",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "avg(hyperrag_evaluation_score{metric=\"context_precision\"}) by (lang, tenant)",
+            "legendFormat": "{{lang}} - {{tenant}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 1,
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 0.8},
+                {"color": "green", "value": 0.9}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+      },
+      {
+        "id": 4,
+        "title": "Context Recall Score",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "avg(hyperrag_evaluation_score{metric=\"context_recall\"}) by (lang, tenant)",
+            "legendFormat": "{{lang}} - {{tenant}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 1,
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 0.8},
+                {"color": "green", "value": 0.9}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+      },
+      {
+        "id": 5,
+        "title": "Evaluation Volume",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(hyperrag_evaluation_total[5m])",
+            "legendFormat": "{{metric}} - {{lang}} - {{tenant}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16}
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s"
+  }
+}

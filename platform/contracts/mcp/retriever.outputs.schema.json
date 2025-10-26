@@ -1,0 +1,153 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hyperrag.ai/schemas/retriever.outputs.schema.json",
+  "title": "Retriever MCP Tool Output Schema",
+  "description": "Output schema for the retriever.mcp tool",
+  "type": "object",
+  "required": ["results", "metadata"],
+  "properties": {
+    "results": {
+      "type": "array",
+      "description": "Array of retrieved document chunks",
+      "items": {
+        "type": "object",
+        "required": ["chunk_id", "doc_id", "version", "score", "content"],
+        "properties": {
+          "chunk_id": {
+            "type": "string",
+            "description": "Unique identifier for the chunk"
+          },
+          "doc_id": {
+            "type": "string",
+            "description": "Document identifier"
+          },
+          "version": {
+            "type": "string",
+            "description": "Document version"
+          },
+          "chunk_index": {
+            "type": "integer",
+            "description": "Index of the chunk within the document"
+          },
+          "content": {
+            "type": "string",
+            "description": "The actual text content of the chunk"
+          },
+          "score": {
+            "type": "number",
+            "description": "Relevance score (0.0 to 1.0)",
+            "minimum": 0.0,
+            "maximum": 1.0
+          },
+          "rerank_score": {
+            "type": "number",
+            "description": "Re-ranking score if re-ranking was applied",
+            "minimum": 0.0,
+            "maximum": 1.0
+          },
+          "lang": {
+            "type": "string",
+            "enum": ["en", "fa"],
+            "description": "Language of the chunk content"
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Additional metadata about the chunk",
+            "properties": {
+              "title": {
+                "type": "string",
+                "description": "Document title"
+              },
+              "content_type": {
+                "type": "string",
+                "description": "MIME type of the original document"
+              },
+              "created_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the document was created"
+              },
+              "token_count": {
+                "type": "integer",
+                "description": "Number of tokens in the chunk"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Tags associated with the document"
+              }
+            }
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["total_results", "search_time_ms", "rerank_time_ms"],
+      "properties": {
+        "total_results": {
+          "type": "integer",
+          "description": "Total number of results found"
+        },
+        "search_time_ms": {
+          "type": "number",
+          "description": "Time taken for the search operation in milliseconds"
+        },
+        "rerank_time_ms": {
+          "type": "number",
+          "description": "Time taken for re-ranking in milliseconds"
+        },
+        "dense_results": {
+          "type": "integer",
+          "description": "Number of dense vector results retrieved"
+        },
+        "sparse_results": {
+          "type": "integer",
+          "description": "Number of sparse vector results retrieved"
+        },
+        "rerank_applied": {
+          "type": "boolean",
+          "description": "Whether re-ranking was applied"
+        },
+        "search_mode": {
+          "type": "string",
+          "enum": ["fast", "balanced", "thorough"],
+          "description": "Search mode that was used"
+        },
+        "query_embedding_model": {
+          "type": "string",
+          "description": "Model used for query embedding"
+        },
+        "rerank_model": {
+          "type": "string",
+          "description": "Model used for re-ranking"
+        }
+      }
+    },
+    "cost": {
+      "type": "object",
+      "description": "Cost breakdown for the retrieval operation",
+      "properties": {
+        "embedding_cost": {
+          "type": "number",
+          "description": "Cost for query embedding"
+        },
+        "search_cost": {
+          "type": "number",
+          "description": "Cost for vector search"
+        },
+        "rerank_cost": {
+          "type": "number",
+          "description": "Cost for re-ranking"
+        },
+        "total_cost": {
+          "type": "number",
+          "description": "Total cost for the operation"
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}
