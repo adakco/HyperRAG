@@ -1,157 +1,465 @@
-# راهنمای کامل و دقیق تمام سرویس‌های HyperRAG
+# راهنمای کامل، دقیق و جامع تمام سرویس‌های HyperRAG
 
 **Last Updated:** 2025-10-27  
-**Version:** 3.0 - Complete & Detailed  
-**Purpose:** توضیح شفاف، دقیق و کامل هر 13 سرویس
+**Version:** 4.0 - Complete, Detailed & Comprehensive  
+**Purpose:** توضیح شفاف، دقیق و کامل هر 13 سرویس با تمام جزئیات معماری و عملکرد
 
 ---
 
-## 📊 فهرست سرویس‌ها
+## 📚 فهرست مطالب
 
-| # | Service | Port | Type | توضیح مختصر |
-|---|---------|------|------|-------------|
-| 1 | Ingestor | 8000 | Core | آپلود و ذخیره سند |
-| 2 | Normalizer | 8001 | Core | پاکسازی و نرمال‌سازی |
-| 3 | Chunker | 8003 | Core | تقسیم به chunks |
-| 4 | Embedder | 8004 | Core | تولید embedding |
-| 5 | Retriever | 8002 | Core | جستجوی hybrid |
-| 6 | Reranker | 8011 | Support | مرتب‌سازی مجدد |
-| 7 | Evaluator | 8005 | Support | ارزیابی کیفیت |
-| 8 | Agent-Orch | 8006 | Orchestration | هدایت agent |
-| 9 | Policy | 8007 | Security | کنترل دسترسی |
-| 10 | Costing | 8008 | Billing | محاسبه هزینه |
-| 11 | Pack | 8009 | Enhancement | بسته‌بندی context |
-| 12 | Memory | 8010 | Enhancement | مدیریت حافظه |
-| 13 | Graph KG | 8012 | Enhancement | Knowledge graph |
+1. [معرفی سیستم](#معرفی-سیستم-hyperrag)
+2. [معماری کلی](#معماری-کلی-سیستم)
+3. [Core Pipeline Services](#سرویس‌های-core-pipeline)
+4. [Supporting Services](#سرویس‌های-پشتیبانی)
+5. [Orchestration Services](#سرویس‌های-ارکستراسیون)
+6. [Security Services](#سرویس‌های-امنیتیލ)
+7. [Billing Services](#سرویس‌های-بیلینگ)
+8. [Enhancement Services](#سرویس‌های-تقویت-کننده)
+9. [Pipeline Flow](#جریان-کامل-pipeline)
+10. [Testing Guide](#راهنمای-تست)
 
 ---
 
-# 1. Ingestor Service (Port 8000)
+# معرفی سیستم HyperRAG
 
-## معرفی
+HyperRAG یک سیستم پیشرفته RAG (Retrieval-Augmented Generation) است که از معماری میکروسرویس استفاده می‌کند. این سیستم قابلیت پردازش اسناد چندزبانه (فارسی و انگلیسی) را دارد و شامل **13 سرویس مستقل** است.
 
-Ingestor اولین سرویس در pipeline است که فایل‌ها را از کاربر دریافت و در MinIO ذخیره می‌کند.
+## ویژگی‌های کلیدی
 
-### معماری
+- ✅ **Multi-tenant**: پشتیبانی از چند سازمان
+- ✅ **Multi-language**: فارسی و انگلیسی
+- ✅ **Hybrid Search**: جستجوی ترکیبی (Vector + Graph)
+- ✅ **Event-Driven**: پردازش مبتنی بر رویداد
+- ✅ **Observability**: OpenTelemetry + Prometheus + Grafana
+- ✅ **Scalable**: معماری قابل گسترش
+
+## اجزای سیستم
+
+| Component | Technology | کاربرد |
+|-----------|-----------|--------|
+| **Storage** | MinIO | ذخیره‌سازی اسناد خام و پردازش شده |
+| **Database** | PostgreSQL | Metadata و اطلاعات chunk‌ها |
+| **Vector DB** | Qdrant | ذخیره embeddings |
+| **Graph DB** | Neo4j | Knowledge Graph |
+| **Message Queue** | NATS | ارتباط event-driven |
+| **Cache** | Redis | کش‌گذاری |
+| **Monitoring** | Prometheus + OTEL | Metrics و Tracing |
+| **Visualization** | Grafana | Dashboard و Service Graph |
+
+---
+
+# معماری کلی سیستم
+
+## نمودار جریان داده
 
 ```
-Client → POST /ingest → Ingestor → MinIO (Raw) → NATS Event → Normalizer
+┌─────────────┐
+│   Client    │
+└──────┬──────┘
+       │ HTTP/REST
+       ▼
+┌─────────────────────────────────┐
+│      Ingestor (8000)            │ ← Upload document
+│  - Receive file                 │
+│  - Generate version             │
+│  - Store in MinIO (raw)         │
+│  - Publish NATS event           │
+└──────┬──────────────────────────┘
+       │ Event: doc.ingested.v1
+       ▼
+┌─────────────────────────────────┐
+│    Normalizer (8001)            │ ← Auto trigger (event-driven)
+│  - Read from MinIO              │
+│  - Detect PII                   │
+│  - Normalize text               │
+│  - Store in MinIO (clean)       │
+│  - Publish NATS event           │
+└──────┬──────────────────────────┘
+       │ Event: doc.normalized.v1
+       ▼
+┌─────────────────────────────────┐
+│     Chunker (8003)              │ ← Manual trigger
+│  - Split into chunks            │
+│  - Calculate tokens             │
+│  - Store in PostgreSQL          │
+│  - Store in MinIO               │
+└──────┬──────────────────────────┘
+       ▼
+┌─────────────────────────────────┐
+│    Embedder (8004)              │ ← Manual trigger
+│  - Generate embeddings          │
+│  - Store in Qdrant              │
+│  - Update PostgreSQL            │
+└──────┬──────────────────────────┘
+       ▼
+┌─────────────────────────────────┐
+│    Retriever (8002)             │ ← User query
+│  - Vector search (Qdrant)       │
+│  - Graph search (Neo4j)         │
+│  - Hybrid fusion                │
+│  - Return results               │
+└─────────────────────────────────┘
 ```
 
-### وظایف
+## انواع سرویس‌ها
 
-1. دریافت فایل از client
-2. تولید version number
-3. محاسبه SHA-256 hash
-4. ذخیره در MinIO
-5. ثبت metadata در PostgreSQL
-6. انتشار event
+| دسته | سرویس‌ها | تعداد | هدف |
+|------|---------|-------|-----|
+| **Core Pipeline** | Ingestor, Normalizer, Chunker, Embedder, Retriever | 5 | پردازش اصلی اسناد |
+| **Supporting** | Reranker, Evaluator | 2 | بهبود و ارزیابی |
+| **Orchestration** | Agent-Orch | 1 | هماهنگی workflow |
+| **Security** | Policy | 1 | کنترل دسترسی |
+| **Billing** | Costing | 1 | محاسبه هزینه |
+| **Enhancement** | Pack, Memory, Graph KG | 3 | قابلیت‌های پیشرفته |
 
-## API Endpoints
+---
 
-### POST /ingest
+# سرویس‌های Core Pipeline
 
-**Input (Form Data):**
+## 1. Ingestor Service (Port 8000)
+
+### معرفی سرویس
+
+**Ingestor** اولین مرحله در pipeline پردازش اسناد است. این سرویس فایل‌های آپلود شده توسط کاربر را دریافت می‌کند، پردازش می‌کند و در MinIO ذخیره می‌کند.
+
+### معماری و عملکرد
 
 ```
-doc_id: string      # شناسه سند (الزامی)
-tenant: string      # tenant ID (الزامی)
-project: string     # project ID (الزامی)
-lang: string        # "en" یا "fa" (الزامی)
-file: file          # فایل (الزامی)
-title: string       # عنوان (اختیاری)
-author: string      # نویسنده (اختیاری)
-tags: JSON string   # برچسب‌ها (اختیاری)
-acl: JSON string    # دسترسی (اختیاری)
+┌──────────┐      ┌──────────────┐      ┌──────────┐      ┌──────────┐      ┌──────────┐
+│  Client  │─────▶│   Ingestor   │─────▶│  MinIO   │─────▶│PostgreSQL│─────▶│   NATS   │
+│  Upload  │      │   Port 8000  │      │  Raw     │      │ Metadata │      │  Event   │
+│   File   │      │              │      │ Storage  │      │          │      │ Publish  │
+└──────────┘      └──────────────┘      └──────────┘      └──────────┘      └──────────┘
 ```
 
-**Output:**
+### وظایف اصلی
+
+1. **دریافت فایل** از client از طریق HTTP POST (multipart/form-data)
+2. **تولید Version** number منحصر به فرد (Unix timestamp)
+3. **محاسبه Hash** SHA-256 برای اطمینان از یکپارچگی فایل
+4. **ذخیره‌سازی** در MinIO در bucket `raw` با ساختار: `{tenant}/{project}/{doc_id}/{version}`
+5. **ثبت Metadata** در PostgreSQL در جدول `documents` و `document_versions`
+6. **انتشار Event** به NATS با topic `doc.ingested.v1` برای ادامه pipeline
+
+### کلاس‌ها و متدهای اصلی
+
+#### کلاس `IngestorService`
+
+- `initialize()`: اتصال به PostgreSQL, Redis, NATS, MinIO
+- `ingest_document()`: پردازش و ذخیره سند
+- `close()`: بستن تمام اتصالات
+
+### API Endpoints
+
+#### POST /ingest
+
+**Method**: POST  
+**Content-Type**: multipart/form-data
+
+**Input Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `doc_id` | string | ✅ | شناسه منحصر به فرد سند |
+| `tenant` | string | ✅ | شناسه tenant (شرکت/سازمان) |
+| `project` | string | ✅ | شناسه پروژه |
+| `lang` | string | ✅ | زبان سند: "en" یا "fa" |
+| `file` | file | ✅ | فایل سند (txt, pdf, docx, ...) |
+| `title` | string | ❌ | عنوان سند |
+| `author` | string | ❌ | نام نویسنده |
+| `tags` | JSON string | ❌ | آرایه JSON از برچسب‌ها |
+| `acl` | JSON string | ❌ | آرایه JSON از لیست کنترل دسترسی |
+
+**Output Schema:**
 
 ```json
 {
-  "doc_id": "python-001",
+  "doc_id": "python-guide-001",
   "version": 1730123456789,
   "status": "ingested",
-  "uri_raw": "s3://raw/tenant/project/doc_id/version",
-  "sha256": "a8f5f167...",
+  "uri_raw": "s3://raw/mycompany/docs/python-guide-001/1730123456789",
+  "sha256": "a8f5f167f44f4964e6c998dee827110c",
   "file_size": 245760,
-  "content_type": "application/pdf"
+  "file_name": "document.pdf",
+  "content_type": "application/pdf",
+  "upload_time": "2025-10-27T10:30:00Z",
+  "trace_id": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
 }
 ```
 
-**Example:**
+**Example Request:**
 
 ```bash
 curl -X POST "http://localhost:8000/ingest" \
-  -F "doc_id=python-001" \
+  -F "doc_id=python-guide-001" \
   -F "tenant=mycompany" \
-  -F "project=docs" \
+  -F "project=documentation" \
   -F "lang=en" \
+  -F "title=Python Programming Guide" \
+  -F "author=John Doe" \
+  -F "tags=[\"python\", \"programming\", \"guide\"]" \
   -F "file=@document.pdf"
+```
+
+**Example Response:**
+
+```json
+{
+  "doc_id": "python-guide-001",
+  "version": 1730123456789,
+  "status": "ingested",
+  "uri_raw": "s3://raw/mycompany/docs/python-guide-001/1730123456789",
+  "sha256": "a8f5f167f44f4964e6c998dee827110c",
+  "file_size": 245760,
+  "file_name": "document.pdf",
+  "content_type": "application/pdf",
+  "upload_time": "2025-10-27T10:30:00Z",
+  "trace_id": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+}
+```
+
+### Event Publishing
+
+بعد از موفقیت، این event به NATS ارسال می‌شود:
+
+```json
+{
+  "type": "doc.ingested.v1",
+  "source": "ingestor",
+  "specversion": "1.0",
+  "data": {
+    "doc_id": "python-guide-001",
+    "version": "1730123456789",
+    "uri_raw": "s3://raw/mycompany/docs/python-guide-001/1730123456789",
+    "lang": "en",
+    "tenant": "mycompany",
+    "project": "documentation"
+  }
+}
+```
+
+### نحوه استفاده در کد Python
+
+```python
+import requests
+
+# آماده‌سازی فایل
+files = {
+    'file': ('document.pdf', open('document.pdf', 'rb'), 'application/pdf')
+}
+
+data = {
+    'doc_id': 'python-guide-001',
+    'tenant': 'mycompany',
+    'project': 'documentation',
+    'lang': 'en',
+    'title': 'Python Programming Guide'
+}
+
+# ارسال درخواست
+response = requests.post('http://localhost:8000/ingest', files=files, data=data)
+
+if response.status_code == 200:
+    result = response.json()
+    print(f"Document uploaded: {result['doc_id']}")
+    print(f"Version: {result['version']}")
+    print(f"URI: {result['uri_raw']}")
+else:
+    print(f"Error: {response.status_code} - {response.text}")
+```
+
+### Health Check
+
+#### Endpoint: GET /health
+
+```bash
+curl http://localhost:8000/health
+```
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "service": "ingestor",
+  "version": "1.0",
+  "database_connected": true,
+  "minio_connected": true,
+  "nats_connected": true
+}
 ```
 
 ---
 
-# 2. Normalizer Service (Port 8001)
+## 2. Normalizer Service (Port 8001)
 
-## معرفی
+### معرفی سرویس
 
-Normalizer سرویس پاکسازی و نرمال‌سازی متن است که به صورت event-driven کار می‌کند.
+**Normalizer** سرویس پاکسازی و نرمال‌سازی متن است که به صورت event-driven کار می‌کند. این سرویس بعد از دریافت event از Ingestor، متن را پاکسازی، PII (Personally Identifiable Information) را حذف، و نرمال‌سازی می‌کند.
 
-### معماری
+### معماری و عملکرد
 
 ```
-NATS Event (doc.ingested.v1) → Normalizer → MinIO (Clean) → NATS Event
+┌──────────┐      ┌──────────────┐      ┌──────────┐      ┌──────────┐
+│   NATS   │─────▶│  Normalizer  │─────▶│  MinIO   │─────▶│   NATS   │
+│  Event   │      │  Port 8001   │      │  Clean   │      │  Event   │
+│ doc.     │      │              │      │ Storage  │      │ doc.     │
+│ingested  │      │              │      │          │      │normalized│
+└──────────┘      └──────────────┘      └──────────┘      └──────────┘
 ```
 
-### وظایف
+### وظایف اصلی
 
-1. خواندن فایل از MinIO
-2. تشخیص زبان
-3. حذف PII (presidio)
-4. نرمال‌سازی فارسی (hazm)
-5. نرمال‌سازی انگلیسی
-6. ذخیره نسخه clean
+1. **خواندن سند** از MinIO براساس `uri_raw` از event
+2. **تشخیص زبان** به صورت خودکار (persian یا english)
+3. **حذف PII** با استفاده از library `presidio`
+4. **نرمال‌سازی فارسی** با استفاده از `hazm`
+5. **نرمال‌سازی انگلیسی** برای پاکسازی whitespace و علائم
+6. **ذخیره نسخه clean** در MinIO در bucket `raw`
+7. **انتشار Event** به NATS با topic `doc.normalized.v1`
 
-### PII Detection
+### ویژگی‌های خاص
 
+#### PII Detection با Presidio
+
+موارد شناسایی شده:
 - Email addresses
-- Phone numbers  
+- Phone numbers
 - Credit card numbers
 - IP addresses
-- Names
+- Names (Person names)
 - Dates
 
-## API Endpoints
+#### Persian Normalization با Hazm
 
-### GET /health
+```python
+from hazm import Normalizer as PersianNormalizer
+
+normalizer = PersianNormalizer()
+text = "این متن   فارسی است!"
+cleaned = normalizer.normalize(text)
+# نتیجه: "این متن فارسی است"
+```
+
+### کلاس‌-b متدهای اصلی
+
+#### کلاس `NormalizerService`
+
+- `initialize()`: اتصال به PostgreSQL, Redis, NATS, MinIO
+- `start_nats_listener()`: subscribe به event `doc.ingested.v1`
+- `handle_document_ingested()`: پردازش event و normalize
+- `normalize_text()`: پاکسازی و نرمال‌سازی متن
+- `close()`: بستن تمام اتصالات
+
+### Event Subscriber
+
+#### Listening to: `doc.ingested.v1`
+
+```json
+{
+  "type": "doc.ingested.v1",
+  "data": {
+    "doc_id": "python-guide-001",
+    "version": "1730123456789",
+    "uri_raw": "s3://raw/mycompany/docs/python-guide-001/1730123456789",
+    "lang": "en",
+    "tenant": "mycompany"
+  }
+}
+```
+
+### Event Publisher
+
+#### Publishing: `doc.normalized.v1`
+
+```json
+{
+  "type": "doc.normalized.v1",
+  "source": "normalizer",
+  "specversion": "1.0",
+  "data": {
+    "doc_id": "python-guide-001",
+    "version": "1730123456789",
+    "uri_clean": "s3://raw/mycompany/docs/python-guide-001/1730123456789/clean",
+    "lang": "en",
+    "tenant": "mycompany",
+    "project": "documentation",
+    "pii_detected": 3,
+    "pii_removed": true
+  }
+}
+```
+
+### API Endpoints
+
+این سرویس فقط health check endpoint دارد و به صورت event-driven کار می‌کند.
+
+#### GET /health
 
 ```bash
 curl http://localhost:8001/health
 ```
 
+**Response:**
+```json
+{
+  "status": "healthy",
+  "service": "normalizer",
+  "events_processed": 1250,
+  "pii_detected": 342
+}
+```
+
+### نحوه استفاده
+
+این سرویس نیازی به فراخوانی مستقیم ندارد. به محض آپلود سند توسط Ingestor، به صورت خودکار event دریافت می‌کند و پردازش را شروع می‌کند.
+
+### مثال عملی
+
+```python
+# 1. User آپلود می‌کند
+response = requests.post('http://localhost:8000/ingest', ...)
+# result: {"doc_id": "test", "version": "123", "uri_raw": "s3://..."}
+
+# 2. بعد از 5-10 ثانیه، Normalizer خودکار کار می‌کند
+# 3. شما می‌توانید فایل clean شده را بررسی کنید:
+
+import boto3
+
+s3 = boto3.client('s3', 
+    endpoint_url='http://192.168.2.23:9190',
+    aws_access_key_id='minioadmin',
+    aws_secret_access_key='minioadmin123'
+)
+
+clean_content = s3.get_object(
+    Bucket='raw',
+    Key='mycompany/docs/test/123/clean'
+)['Body'].read()
+```
+
 ---
 
-# 3. Chunker Service (Port 8003)
+## 3. Chunker Service (Port 8003)
 
-## معرفی
+### معرفی سرویس
 
-Chunker سرویس تقسیم اسناد به chunks برای embedding است.
+**Chunker** سرویس تقسیم اسناد به chunks برای embedding است. این سرویس متن clean شده را به قطعات قابل مدیریت تقسیم می‌کند.
 
-### معماری
+### معماری و عملکرد
 
 ```
-API Call → Chunker → PostgreSQL (metadata) + MinIO (chunks)
+API Call → Chunker → PostgreSQL (metadata) → MinIO (chunks)
 ```
 
-### وظایف
+### وظایف اصلی
 
-1. خواندن سند clean شده
-2. تشخیص زبان
-3. تقسیم به chunks
-4. محاسبه token count
-5. ذخیره در PostgreSQL
-6. ذخیره chunks در MinIO
+1. **خواندن سند clean شده** از MinIO
+2. **تشخیص زبان** (persian یا english)
+3. **تقسیم به chunks** با استفاده از `langchain_text_splitters`
+4. **محاسبه token count** با استفاده از `tiktoken`
+5. **ذخیره در PostgreSQL** در جدول `document_chunks`
+6. **ذخیره chunks در MinIO** برای پردازش بعدی
 
 ### پارامترهای Chunking
 
@@ -160,21 +468,33 @@ API Call → Chunker → PostgreSQL (metadata) + MinIO (chunks)
 - `max_chunk_size`: 2000 tokens
 - `min_chunk_size`: 100 tokens
 
-## API Endpoints
+### کلاس‌ها و متدهای اصلی
 
-### POST /chunk
+#### کلاس `LanguageSpecificChunker`
+
+- `chunk_text()`: تقسیم متن براساس زبان
+
+#### کلاس `ChunkerService`
+
+- `initialize()`: اتصال به PostgreSQL, Redis, NATS, MinIO
+- `chunk_document()`: پردازش و chunking سند
+- `close()`: بستن تمام اتصالات
+
+### API Endpoints
+
+#### POST /chunk
 
 **Input (Query Parameters):**
 
-```
-doc_id: string           # شناسه سند
-version: string          # نسخه
-uri_clean: string        # URI فایل clean شده
-lang: string             # "en" یا "fa"
-tenant: string           # tenant ID
-```
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `doc_id` | string | ✅ | شناسه سند |
+| `version` | string | ✅ | نسخه سند |
+| `uri_clean` | string | ✅ | URI فایل clean شده در MinIO |
+| `lang` | string | ✅ | "en" یا "fa" |
+| `tenant` | string | ✅ | tenant ID |
 
-**Output:**
+**Output Schema:**
 
 ```json
 {
@@ -194,7 +514,7 @@ tenant: string           # tenant ID
 }
 ```
 
-**Example:**
+**Example Request:**
 
 ```bash
 curl -X POST "http://localhost:8003/chunk?doc_id=python-001&version=1730123456789&uri_clean=s3://raw/tenant/project/python-001/1730123456789/clean&lang=en&tenant=mycompany"
@@ -202,24 +522,24 @@ curl -X POST "http://localhost:8003/chunk?doc_id=python-001&version=173012345678
 
 ---
 
-# 4. Embedder Service (Port 8004)
+## 4. Embedder Service (Port 8004)
 
-## معرفی
+### معرفی سرویس
 
-Embedder سرویس تولید embeddings و ذخیره در Qdrant است.
+**Embedder** سرویس تولید embeddings برای chunks و ذخیره در Qdrant است.
 
-### معماری
+### معماری و عملکرد
 
 ```
-API Call → Embedder → Qdrant (vectors) + PostgreSQL (metadata)
+API Call → Embedder → Qdrant (vectors) → PostgreSQL (metadata)
 ```
 
-### وظایف
+### وظایف اصلی
 
-1. خواندن chunks از MinIO
-2. تولید embedding
-3. ذخیره در Qdrant
-4. ثبت metadata در PostgreSQL
+1. **خواندن chunks از MinIO**
+2. **تولید embeddings** با استفاده از SentenceTransformer
+3. **ذخیره در Qdrant** به صورت points
+4. **ثبت metadata در PostgreSQL**
 
 ### مدل‌های Embedding
 
@@ -228,22 +548,36 @@ API Call → Embedder → Qdrant (vectors) + PostgreSQL (metadata)
 - **Dimension**: 384
 - **Batch Size**: 32
 
-## API Endpoints
+### کلاس‌ها و متدهای اصلی
 
-### POST /embed
+#### کلاس `EmbeddingService`
+
+- `initialize()`: بارگذاری مدل‌ها و اتصال به Qdrant
+- `get_embedding()`: تولید embedding برای متن واحد
+- `get_embeddings_batch()`: تولید embedding برای batch
+
+#### کلاس `EmbedderService`
+
+- `initialize()`: اتصال به PostgreSQL, Redis, NATS, MinIO
+- `embed_document()`: پردازش و embedding سند
+- `close()`: بستن تمام اتصالات
+
+### API Endpoints
+
+#### POST /embed
 
 **Input (Query Parameters):**
 
-```
-doc_id: string           # شناسه سند
-version: string          # نسخه
-uri_processed: string    # URI chunks
-lang: string             # "en" یا "fa"
-tenant: string           # tenant ID
-project: string          # project ID (اختیاری)
-```
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `doc_id` | string | ✅ | شناسه سند |
+| `version` | string | ✅ | نسخه سند |
+| `uri_processed` | string | ✅ | URI chunks در MinIO |
+| `lang` | string | ✅ | "en" یا "fa" |
+| `tenant` | string | ✅ | tenant ID |
+| `project` | string | ❌ | project ID |
 
-**Output:**
+**Output Schema:**
 
 ```json
 {
@@ -256,7 +590,7 @@ project: string          # project ID (اختیاری)
 }
 ```
 
-**Example:**
+**Example Request:**
 
 ```bash
 curl -X POST "http://localhost:8004/embed?doc_id=python-001&version=1730123456789&uri_processed=s3://...&lang=en&tenant=mycompany&project=docs"
@@ -264,26 +598,26 @@ curl -X POST "http://localhost:8004/embed?doc_id=python-001&version=173012345678
 
 ---
 
-# 5. Retriever Service (Port 8002)
+## 5. Retriever Service (Port 8002)
 
-## معرفی
+### معرفی سرویس
 
-Retriever سرویس جستجوی hybrid (vector + graph) است.
+**Retriever** سرویس جستجوی hybrid است که ترکیبی از vector search (Qdrant) و graph search (Neo4j) را انجام می‌دهد.
 
-### معماری
+### معماری و عملکرد
 
 ```
 Query → Retriever → Qdrant (vector) → Neo4j (graph) → Fusion → Results
 ```
 
-### وظایف
+### وظایف اصلی
 
-1. دریافت query از user
-2. تولید embedding برای query
-3. جستجوی vector در Qdrant
-4. جستجوی graph در Neo4j (اختیاری)
-5. ترکیب نتایج (fusion)
-6. بازگرداندن نتایج
+1. **دریافت query از user**
+2. **تولید embedding برای query**
+3. **جستجوی vector در Qdrant**
+4. **جستجوی graph در Neo4j** (اختیاری)
+5. **ترکیب نتایج** (fusion)
+6. **بازگرداندن نتایج**
 
 ### Hybrid Retrieval
 
@@ -291,9 +625,25 @@ Query → Retriever → Qdrant (vector) → Neo4j (graph) → Fusion → Results
 - **Graph Weight**: 0.3 (پیش‌فرض)
 - **Fusion Method**: Weighted score
 
-## API Endpoints
+### کلاس‌ها و متدهای اصلی
 
-### POST /retrieve
+#### کلاس `EmbeddingService`
+
+- `initialize()`: بارگذاری مدل‌ها
+- `get_embedding()`: تولید embedding
+- `rerank()`: reranking documents
+
+#### کلاس `RetrieverService`
+
+- `initialize()`: اتصال به PostgreSQL, Redis, Qdrant, Neo4j
+- `retrieve()`: جستجو و retrieval
+- `query_graph_knowledge()`: جستجوی graph
+- `_fuse_results()`: ترکیب نتایج
+- `close()`: بستن تمام اتصالات
+
+### API Endpoints
+
+#### POST /retrieve
 
 **Input (JSON):**
 
@@ -310,7 +660,7 @@ Query → Retriever → Qdrant (vector) → Neo4j (graph) → Fusion → Results
 }
 ```
 
-**Output:**
+**Output Schema:**
 
 ```json
 {
@@ -320,8 +670,7 @@ Query → Retriever → Qdrant (vector) → Neo4j (graph) → Fusion → Results
       "doc_id": "...",
       "content": "...",
       "score": 0.85,
-      "rerank_score": 0.88,
-      "metadata": {
+      "matadata": {
         "fused": true,
         "vector_score": 0.75,
         "graph_score": 0.80
@@ -336,7 +685,7 @@ Query → Retriever → Qdrant (vector) → Neo4j (graph) → Fusion → Results
 }
 ```
 
-**Example:**
+**Example Request:**
 
 ```bash
 curl -X POST "http://localhost:8002/retrieve" \
@@ -351,33 +700,32 @@ curl -X POST "http://localhost:8002/retrieve" \
 
 ---
 
-# 6. Reranker Service (Port 8011)
+# سرویس‌های پشتیبانی
 
-## معرفی
+## 6. Reranker Service (Port 8011)
 
-Reranker سرویس مرتب‌سازی مجدد نتایج با cross-encoder است.
+### معرفی سرویس
 
-### معماری
+**Reranker** سرویس مرتب‌سازی مجدد نتایج با cross-encoder است.
 
-```
-Documents + Query → Reranker → Cross-Encoder → Sorted Results
-```
+### وظایف اصلی
 
-### وظایف
+1. **دریافت documents و query**
+2. **امتیازدهی با cross-encoder**
+3. **مرتب‌سازی براساس score**
+4. **بازگرداندن نتایج**
 
-1. دریافت documents و query
-2. امتیازدهی با cross-encoder
-3. مرتب‌سازی براساس score
-4. بازگرداندن نتایج
+### کلاس‌ها و متدهای اصلی
 
-### مدل Reranking
+#### کلاس `RerankerService`
 
-- **Model**: `ms-marco-MiniLM-L-6-v2`
-- **Type**: Cross-Encoder
+- `initialize()`: اتصال به PostgreSQL, Redis, NATS
+- `rerank_documents()`: پردازش reranking
+- `close()`: بستن تمام اتصالات
 
-## API Endpoints
+### API Endpoints
 
-### POST /rerank
+#### POST /rerank
 
 **Input (JSON):**
 
@@ -393,7 +741,7 @@ Documents + Query → Reranker → Cross-Encoder → Sorted Results
 }
 ```
 
-**Output:**
+**Output Schema:**
 
 ```json
 {
@@ -407,37 +755,39 @@ Documents + Query → Reranker → Cross-Encoder → Sorted Results
 
 ---
 
-# 7. Evaluator Service (Port 8005)
+## 7. Evaluator Service (Port 8005)
 
-## معرفی
+### معرفی سرویس
 
-Evaluator سرویس ارزیابی کیفیت RAG responses است.
+**Evaluator** سرویس ارزیابی کیفیت RAG responses است.
 
-### معماری
+### وظایف اصلی
 
-```
-Query + Answer + Contexts → Evaluator → Quality Metrics
-```
+1. **دریافت query, answer, contexts**
+2. **محاسبه faithfulness**
+3. **محاسبه answer relevancy**
+4. **محاسبه context precision**
+5. **محاسبه context recall**
+6. **بازگرداندن scores**
 
-### وظایف
+### کلاس‌ها و متدهای اصلی
 
-1. دریافت query, answer, contexts
-2. محاسبه faithfulness
-3. محاسبه answer relevancy
-4. محاسبه context precision
-5. محاسبه context recall
-6. بازگرداندن scores
+#### کلاس `LanguageSpecificEvaluator`
 
-### Metrics
+- `evaluate_faithfulness()`: ارزیابی faithfulness
+- `evaluate_answer_relevancy()`: ارزیابی relevancy
+- `evaluate_context_precision()`: ارزیابی precision
+- `evaluate_context_recall()`: ارزیابی recall
 
-- **Faithfulness**: آیا answer بر اساس context است؟
-- **Answer Relevancy**: آیا answer به query مربوط است؟
-- **Context Precision**: آیا contexts مرتبط هستند؟
-- **Context Recall**: آیا تمام context های لازم موجود است؟
+#### کلاس `EvaluatorService`
 
-## API Endpoints
+- `initialize()`: اتصال به PostgreSQL, Redis, NATS
+- `evaluate()`: پردازش evaluation
+- `close()`: بستن تمام اتصالات
 
-### POST /evaluate
+### API Endpoints
+
+#### POST /evaluate
 
 **Input (JSON):**
 
@@ -451,7 +801,7 @@ Query + Answer + Contexts → Evaluator → Quality Metrics
 }
 ```
 
-**Output:**
+**Output Schema:**
 
 ```json
 {
@@ -464,25 +814,27 @@ Query + Answer + Contexts → Evaluator → Quality Metrics
 
 ---
 
-# 8. Agent-Orch Service (Port 8006)
+# سرویس‌های ارکستراسیون
 
-## معرفی
+## 8. Agent-Orch Service (Port 8006)
 
-Agent-Orch سرویس ارکستراسیون agent workflows به صورت MCP-Native است که agent sessions را مدیریت می‌کند.
+### معرفی سرویس
 
-### معماری
+**Agent-Orch** سرویس ارکستراسیون agent workflows به صورت MCP-Native است.
+
+### معماری و عملکرد
 
 ```
 Query → Start Session → Background Processing → MCP Tools → Store Results
 ```
 
-### وظایف
+### وظایف اصلی
 
-1. ایجاد agent session
-2. اجرای agent loop در background
-3. فراخوانی MCP tools (retriever, evaluator)
-4. جمع‌آوری و ذخیره نتایج
-5. تولید پاسخ نهایی
+1. **ایجاد agent session**
+2. **اجرای agent loop در background**
+3. **فراخوانی MCP tools**
+4. **جمع‌آوری و ذخیره نتایج**
+5. **تولید پاسخ نهایی**
 
 ### پارامترهای پیکربندی
 
@@ -492,11 +844,23 @@ Query → Start Session → Background Processing → MCP Tools → Store Result
 - **LLM Model**: deepseek/deepseek-chat (OpenRouter)
 - **Tools**: retriever.mcp, evaluator.ragas.mcp
 
-## API Endpoints
+### کلاس‌ها و متدهای اصلی
 
-### POST /sessions
+#### کلاس `MCPTool`
 
-شروع یک agent session جدید
+- `invoke()`: فراخوانی tool
+- `close()`: بستن HTTP client
+
+#### کلاس `AgentOrchestrator`
+
+- `initialize()`: اتصال به PostgreSQL, Redis, NATS و initialize tools
+- `start_session()`: شروع agent session
+- `execute_agent_loop()`: اجرای agent loop
+- `close()`: بستن تمام اتصالات
+
+### API Endpoints
+
+#### POST /sessions
 
 **Input (Form Data):**
 
@@ -509,7 +873,7 @@ token_budget: integer  # بودجه توکن (پیش‌فرض: 4000)
 max_steps: integer     # حداکثر گام‌ها (پیش‌فرض: 10)
 ```
 
-**Output:**
+**Output Schema:**
 
 ```json
 {
@@ -520,7 +884,7 @@ max_steps: integer     # حداکثر گام‌ها (پیش‌فرض: 10)
 }
 ```
 
-**Example:**
+**Example Request:**
 
 ```bash
 curl -X POST "http://localhost:8006/sessions" \
@@ -530,35 +894,9 @@ curl -X POST "http://localhost:8006/sessions" \
   -F "user_id=user123"
 ```
 
-### POST /session/start
+#### GET /sessions/{session_id}
 
-شروع session با فرمت JSON (برای testing)
-
-**Input (JSON):**
-
-```json
-{
-  "initial_query": "What is Python?",
-  "tenant": "mycompany",
-  "user_id": "user123"
-}
-```
-
-**Output:**
-
-```json
-{
-  "session_id": "uuid-...",
-  "status": "started",
-  "message": "Agent session started successfully"
-}
-```
-
-### GET /sessions/{session_id}
-
-دریافت وضعیت agent session
-
-**Output:**
+**Output Schema:**
 
 ```json
 {
@@ -572,53 +910,31 @@ curl -X POST "http://localhost:8006/sessions" \
 }
 ```
 
-### GET /sessions/{session_id}/steps
-
-دریافت لیست steps یک session
-
-**Output:**
-
-```json
-[
-  {
-    "step_id": "uuid-...",
-    "step_number": 1,
-    "tool_name": "retriever.mcp",
-    "input_data": {"query": "...", "lang": "en"},
-    "output_data": {"results": [...]},
-    "status": "completed",
-    "cost": 0.0001,
-    "duration_ms": 234,
-    "created_at": "2025-10-27T10:30:01Z",
-    "completed_at": "2025-10-27T10:30:01Z"
-  }
-]
-```
-
 ---
 
-# 9. Policy Service (Port 8007)
+# سرویس‌های امنیتی
 
-## معرفی
+## 9. Policy Service (Port 8007)
 
-Policy سرویس کنترل دسترسی و policy enforcement است.
+### معرفی سرویس
 
-### معماری
+**Policy** سرویس کنترل دسترسی و policy enforcement است.
 
-```
-Principal + Action + Resource → Policy → Decision (Allow/Deny)
-```
+### کلاس‌ها و متدهای اصلی
 
-### وظایف
+#### کلاس `OPAClient`
 
-1. دریافت principal, action, resource
-2. ارزیابی policy
-3. تصمیم‌گیری (allow/deny)
-4. ثبت audit log
+- `evaluate_policy()`: ارزیابی policy
 
-## API Endpoints
+#### کلاس `PolicyService`
 
-### POST /policy/evaluate
+- `initialize()`: اتصال به PostgreSQL, Redis, NATS
+- `evaluate()`: پردازش policy evaluation
+- `close()`: بستن تمام اتصالات
+
+### API Endpoints
+
+#### POST /policy/evaluate
 
 **Input (JSON):**
 
@@ -631,7 +947,7 @@ Principal + Action + Resource → Policy → Decision (Allow/Deny)
 }
 ```
 
-**Output:**
+**Output Schema:**
 
 ```json
 {
@@ -642,28 +958,29 @@ Principal + Action + Resource → Policy → Decision (Allow/Deny)
 
 ---
 
-# 10. Costing Service (Port 8008)
+# سرویس‌های بیلینگ
 
-## معرفی
+## 10. Costing Service (Port 8008)
 
-Costing سرویس محاسبه هزینه و budget management است.
+### معرفی سرویس
 
-### معماری
+**Costing** سرویس محاسبه هزینه و budget management است.
 
-```
-Operation + Cost → Costing → Tracking + Budget Check
-```
+### کلاس‌ها و متدهای اصلی
 
-### وظایف
+#### کلاس `CostCalculator`
 
-1. دریافت cost information
-2. ثبت در database
-3. بررسی budget
-4. ارسال alert در صورت تجاوز
+- `calculate_cost()`: محاسبه هزینه
 
-## API Endpoints
+#### کلاس `CostingService`
 
-### POST /costing/track
+- `initialize()`: اتصال به PostgreSQL, Redis, NATS
+- `track_cost()`: ثبت هزینه
+- `close()`: بستن تمام اتصالات
+
+### API Endpoints
+
+#### POST /costing/track
 
 **Input (JSON):**
 
@@ -676,7 +993,7 @@ Operation + Cost → Costing → Tracking + Budget Check
 }
 ```
 
-**Output:**
+**Output Schema:**
 
 ```json
 {
@@ -688,28 +1005,29 @@ Operation + Cost → Costing → Tracking + Budget Check
 
 ---
 
-# 11. Pack Service (Port 8009)
+# سرویس‌های تقویت‌کننده
 
-## معرفی
+## 11. Pack Service (Port 8009)
 
-Pack سرویس بسته‌بندی context برای مدیریت long contexts است.
+### معرفی سرویس
 
-### معماری
+**Pack** سرویس بسته‌بندی context برای مدیریت long contexts است.
 
-```
-Contexts + Query → Pack → Relevance Calculation → Packed Contexts
-```
+### کلاس‌ها و متدهای اصلی
 
-### وظایف
+#### کلاس `ContextPacker`
 
-1. دریافت contexts و query
-2. محاسبه relevance
-3. بسته‌بندی contexts
-4. بازگرداندن packed contexts
+- `pack_contexts()`: بسته‌بندی contexts
 
-## API Endpoints
+#### کلاس `PackLongRAGService`
 
-### POST /pack
+- `initialize()`: اتصال به PostgreSQL, Redis, miss
+- `pack()`: پردازش packing
+- `close()`: بستن تمام اتصالات
+
+### API Endpoints
+
+#### POST /pack
 
 **Input (JSON):**
 
@@ -723,7 +1041,7 @@ Contexts + Query → Pack → Relevance Calculation → Packed Contexts
 }
 ```
 
-**Output:**
+**Output Schema:**
 
 ```json
 {
@@ -743,34 +1061,28 @@ Contexts + Query → Pack → Relevance Calculation → Packed Contexts
 
 ---
 
-# 12. Memory Service (Port 8010)
+## 12. Memory Service (Port 8010)
 
-## معرفی
+### معرفی سرویس
 
-Memory سرویس مدیریت episodic و semantic memories است.
+**Memory** سرویس مدیریت episodic و semantic memories است.
 
-### معماری
+### کلاس‌ها و متدهای اصلی
 
-```
-Content → Memory → Embedding → PostgreSQL (memories)
-Query → Memory → Similarity Search → Retrieved Memories
-```
+#### کلاس `EmbeddingService`
 
-### وظایف
+- `get_embedding()`: تولید embedding
 
-1. ذخیره memory (episodic/semantic)
-2. تولید embedding
-3. ذخیره در PostgreSQL
-4. جستجوی similarity
+#### کلاس `MemoryService`
 
-### انواع Memory
+- `initialize()`: اتصال به PostgreSQL, Redis, NATS و create tables
+- `store_memory()`: ذخیره memory
+- `search_memories()`: جستجوی memories
+- `close()`: بستن تمام اتصالات
 
-- **Episodic**: خاطرات رویدادها
-- **Semantic**: خاطرات دانشی
+### API Endpoints
 
-## API Endpoints
-
-### POST /store
+#### POST /store
 
 **Input (Query Parameters):**
 
@@ -783,18 +1095,7 @@ user_id: string      # user ID (اختیاری)
 session_id: string   # session ID (اختیاری)
 ```
 
-**Output:**
-
-```json
-{
-  "memory_id": "uuid...",
-  "memory_type": "episodic",
-  "tenant": "mycompany",
-  "created_at": "2025-10-27T..."
-}
-```
-
-### POST /retrieve
+#### POST /retrieve
 
 **Input (JSON):**
 
@@ -808,7 +1109,7 @@ session_id: string   # session ID (اختیاری)
 }
 ```
 
-**Output:**
+**Output Schema:**
 
 ```json
 {
@@ -816,7 +1117,7 @@ session_id: string   # session ID (اختیاری)
   "results": [
     {
       "memory_id": "...",
-      "content": "User asked about Python",
+      "content": "User asked中是 Python",
       "score": 0.92
     }
   ]
@@ -825,34 +1126,30 @@ session_id: string   # session ID (اختیاری)
 
 ---
 
-# 13. Graph KG Service (Port 8012)
+## 13. Graph KG Service (Port 8012)
 
-## معرفی
+### معرفی سرویس
 
-Graph KG سرویس استخراج entities و relationships و query در Neo4j است.
+**Graph KG** سرویس استخراج entities و relationships و query در Neo4j است.
 
-### معماری
+### کلاس‌ها و متدهای اصلی
 
-```
-Text → Extract → Entities + Relationships → Neo4j
-Query → Neo4j → Entities + Relationships → Results
-```
+#### کلاس `EntityExtractor`
 
-### وظایف
+- `initialize()`: بارگذاری spaCy model
+- `extract_entities()`: استخراج entities
+- `extract_relationships()`: استخراج relationships
 
-1. استخراج entities (spaCy یا pattern)
-2. استخراج relationships
-3. ذخیره در Neo4j
-4. Query در Neo4j
+#### کلاس `KnowledgeGraphService`
 
-### Entity Extraction
+- `initialize()`: اتصال به Neo4j
+- `extract_and_store()`: پرداز closing and storage
+- `query_graph()`: جستجوی graph
+- `close()`: بستن تمام اتصالات
 
-- **Model**: spaCy (en_core_web_sm)
-- **Fallback**: Pattern-based extraction
+### API Endpoints
 
-## API Endpoints
-
-### POST /extract
+#### POST /extract
 
 **Input (JSON):**
 
@@ -865,7 +1162,7 @@ Query → Neo4j → Entities + Relationships → Results
 }
 ```
 
-**Output:**
+**Output Schema:**
 
 ```json
 {
@@ -882,7 +1179,7 @@ Query → Neo4j → Entities + Relationships → Results
 }
 ```
 
-### POST /query
+#### POST /query
 
 **Input (JSON):**
 
@@ -894,7 +1191,7 @@ Query → Neo4j → Entities + Relationships → Results
 }
 ```
 
-**Output:**
+**Output Schema:**
 
 ```json
 {
@@ -907,85 +1204,55 @@ Query → Neo4j → Entities + Relationships → Results
 
 ---
 
-## Pipeline کامل
+# جریان کامل Pipeline
 
-### Flow Diagram
+## ترتیب اجرا
 
+1. **Ingest** → `/ingest` (upload document)
+2. **Normalize** → Auto (event-driven)
+3. **Chunk** → `/chunk` (manual trigger)
+4. **Embed** → `/embed` (manual trigger)
+5. **Retrieve** → `/retrieve` (user query)
+
+## مثال کامل
+
+```bash
+# 1. Upload
+curl -X POST "http://localhost:8000/ingest" -F "doc_id=test" ...
+
+# 2. Wait (5-10 seconds for normalization)
+
+# 3. Chunk
+curl -X POST "http://localhost:8003/chunk?..." 
+
+# 4. Embed
+curl -X POST "http://localhost:8004/embed?..."
+
+# 5. Wait (3-5 seconds for indexing)
+
+# 6. Retrieve
+curl -X POST "http://localhost:8002/retrieve" -d '{...}'
 ```
-User Upload → Ingestor (8000)
-              ↓
-         Normalizer (8001) [Auto]
-              ↓
-         Chunker (8003) [Manual]
-              ↓
-         Embedder (8004) [Manual]
-              ↓
-         Retriever (8002) ← User Query
-              ↓
-         Results
-```
-
-### ترتیب اجرا
-
-1. آپلود سند → `/ingest`
-2. صبر برای normalization (5-10 ثانیه)
-3. Chunking → `/chunk`
-4. Embedding → `/embed`
-5. صبر برای indexing (3-5 ثانیه)
-6. Retrieve → `/retrieve`
 
 ---
+
+# راهنمای تست
 
 ## Health Checks
 
 ```bash
-curl http://localhost:8000/health  # Ingestor
-curl http://localhost:8001/health  # Normalizer
-curl http://localhost:8002/health  # Retriever
-curl http://localhost:8003/health  # Chunker
-curl http://localhost:8004/health  # Embedder
-curl http://localhost:8005/health  # Evaluator
-curl http://localhost:8006/health  # Agent-Orch
-curl http://localhost:8007/health  # Policy
-curl http://localhost:8008/health  # Costing
-curl http://localhost:8009/health  # Pack
-curl http://localhost:8010/health  # Memory
-curl http://localhost:8011/health  # Reranker
-curl http://localhost:8012/health  # Graph KG
+for port in 8000 8001 8002 8003 8004 8005 8006 8007 8008 8009 8010 8011 8012; do
+  curl http://localhost:$port/health
+done
 ```
 
----
-
-## تست کامل سیستم
-
-### اسکریپت تست
+## تست کامل
 
 ```bash
 ./test-all-services-complete.sh
 ```
 
-### تست دستی
-
-```bash
-# 1. Health checks
-for port in 8000 8001 8002 8003 8004 8005 8006 8007 8008 8009 8010 8011 8012; do
-  curl http://localhost:$port/health
-done
-
-# 2. Upload document
-curl -X POST "http://localhost:8000/ingest" \
-  -F "doc_id=test-001" \
-  -F "tenant=test" \
-  -F "project=test" \
-  -F "lang=en" \
-  -F Spectacle=@test.txt
-
-# 3. Wait and chunk
-# 4. Embed
-# 5. Retrieve
-```
-
 ---
 
-**این مستند کامل تمام 13 سرویس را پوشش می‌دهد!**
+**این مستند کامل تمام 13 سرویس را با جزئیات معماری و عملکرد پوشش می‌دهد!**
 
