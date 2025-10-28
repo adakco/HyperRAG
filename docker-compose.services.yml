@@ -1,0 +1,196 @@
+version: "3.9"
+
+services:
+  ingestor:
+    build: ./platform/services/ingestor
+    container_name: hyperrag-ingestor
+    ports:
+      - "${INGESTOR_PORT:-8000}:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - NATS_URL=${NATS_URL}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET=${MINIO_BUCKET_RAW}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT}
+    restart: unless-stopped
+
+  normalizer:
+    build: ./platform/services/normalizer
+    container_name: hyperrag-normalizer
+    ports:
+      - "${NORMALIZER_PORT:-8001}:8001"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - NATS_URL=${NATS_URL}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET=${MINIO_BUCKET_CLEAN}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT}
+    restart: unless-stopped
+
+  retriever:
+    build: ./platform/services/retriever
+    container_name: hyperrag-retriever
+    ports:
+      - "${RETRIEVER_PORT:-8002}:8002"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - QDRANT_URL=${QDRANT_URL}
+      - NEO4J_URI=${NEO4J_URI}
+      - NEO4J_USER=${NEO4J_USER}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT}
+    restart: unless-stopped
+
+  chunker:
+    build: ./platform/services/chunker
+    container_name: hyperrag-chunker
+    ports:
+      - "${CHUNKER_PORT:-8003}:8003"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - NATS_URL=${NATS_URL}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET=${MINIO_BUCKET_CLEAN}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT}
+    restart: unless-stopped
+
+  embedder:
+    build: ./platform/services/embedder
+    container_name: hyperrag-embedder
+    ports:
+      - "${EMBEDDER_PORT:-8004}:8004"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - NATS_URL=${NATS_URL}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET=${MINIO_BUCKET_CLEAN}
+      - QDRANT_URL=${QDRANT_URL}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT}
+    restart: unless-stopped
+
+  evaluator:
+    build: ./platform/services/evaluator
+    container_name: hyperrag-evaluator
+    ports:
+      - "${EVALUATOR_PORT:-8005}:8005"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - NATS_URL=${NATS_URL}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL}
+    restart: unless-stopped
+
+  agent_orch:
+    build: ./platform/services/agent-orch
+    container_name: hyperrag-agent-orch
+    ports:
+      - "${AGENT_ORCH_PORT:-8006}:8006"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - NATS_URL=${NATS_URL}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL}
+      - RETRIEVER_URL=http://retriever:8002
+      - EVALUATOR_URL=http://evaluator:8005
+    depends_on:
+      - retriever
+      - evaluator
+    restart: unless-stopped
+
+  policy:
+    build: ./platform/services/policy
+    container_name: hyperrag-policy
+    ports:
+      - "${POLICY_PORT:-8007}:8007"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - NATS_URL=${NATS_URL}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT}
+    restart: unless-stopped
+
+  costing:
+    build: ./platform/services/costing
+    container_name: hyperrag-costing
+    ports:
+      - "${COSTING_PORT:-8008}:8008"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - NATS_URL=${NATS_URL}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT}
+    restart: unless-stopped
+
+  pack:
+    build: ./platform/services/pack.longrag
+    container_name: hyperrag-pack
+    ports:
+      - "${PACK_PORT:-8009}:8009"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - NATS_URL=${NATS_URL}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT}
+    restart: unless-stopped
+
+  memory:
+    build: ./platform/services/memory.memorag
+    container_name: hyperrag-memory
+    ports:
+      - "${MEMORY_PORT:-8010}:8010"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - NATS_URL=${NATS_URL}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT}
+    restart: unless-stopped
+
+  reranker:
+    build: ./platform/services/reranker
+    container_name: hyperrag-reranker
+    ports:
+      - "${RERANKER_PORT:-8011}:8011"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - NATS_URL=${NATS_URL}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT}
+    restart: unless-stopped
+
+  graph_kg:
+    build: ./platform/services/graph.kg
+    container_name: hyperrag-graph-kg
+    ports:
+      - "${GRAPH_KG_PORT:-8012}:8012"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - NATS_URL=${NATS_URL}
+      - NEO4J_URI=${NEO4J_URI}
+      - NEO4J_USER=${NEO4J_USER}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT}
+    restart: unless-stopped
+
+networks:
+  default:
+    name: hyperrag-net
+
+
