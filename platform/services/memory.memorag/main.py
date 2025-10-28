@@ -20,6 +20,7 @@ from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.resources import Resource, SERVICE_NAME
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
@@ -52,7 +53,8 @@ structlog.configure(
 logger = structlog.get_logger()
 
 # Configure OpenTelemetry
-trace.set_tracer_provider(TracerProvider())
+resource = Resource.create(attributes={SERVICE_NAME: "hyperrag-memory"})
+trace.set_tracer_provider(TracerProvider(resource=resource))
 tracer = trace.get_tracer(__name__)
 
 otlp_exporter = OTLPSpanExporter(endpoint="http://192.168.2.23:4317", insecure=True)
@@ -90,18 +92,18 @@ class Settings(BaseSettings):
     nats_url: str = "nats://192.168.2.23:4222"
     service_name: str = "memory.memorag"
     log_level: str = "INFO"
-    
+
     # Memory parameters
     episodic_memory_retention_days: int = 30
     semantic_memory_retention_days: int = 90
     max_episodic_memories: int = 1000
     max_semantic_memories: int = 5000
     similarity_threshold: float = 0.7
-    
+
     # Embedding models
     persian_embedding_model: str = "HooshvareLab/bert-fa-base-uncased"
     english_embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
-    
+
     class Config:
         env_file = ".env"
 
@@ -157,30 +159,30 @@ class MemoryResponse(BaseModel):
 
 class EmbeddingService:
     """Embedding service for memory"""
-    
+
     def __init__(self, settings: Settings):
         self.settings = settings
         self.persian_model = None
         self.english_model = None
-        
+
     async def initialize(self):
         """Initialize embedding models"""
         logger.info("Loading memory embedding models...")
-        
+
         try:
             self.persian_model = SentenceTransformer(self.settings.persian_embedding_model)
             logger.info("Persian memory embedding model loaded")
         except Exception as e:
             logger.error("Failed to load Persian memory embedding model", error=str(e))
             raise
-        
+
         try:
             self.english_model = SentenceTransformer(self.settings.english_embedding_model)
             logger.info("English memory embedding model loaded")
         except Exception as e:
             logger.error("Failed to load English memory embedding model", error=str(e))
             raise
-    
+
     def get_embedding(self, text: str, lang: str) -> np.ndarray:
         """Get embedding for text"""
         if lang == 'fa' and self.persian_model:
@@ -194,14 +196,14 @@ class EmbeddingService:
 
 class MemoryService:
     """Main memory service class"""
-    
+
     def __init__(self, settings: Settings):
         self.settings = settings
         self.db_pool: Optional[asyncpg.Pool] = None
         self.redis_client: Optional[redis.Redis] = None
         self.nats_client: Optional[NATS] = None
         self.embedding_service = EmbeddingService(settings)
-        
+
     async def initialize(self):
         """Initialize database connections and clients"""
         # Database connection pool
@@ -210,22 +212,22 @@ class MemoryService:
             min_size=5,
             max_size=20
         )
-        
+
         # Redis client
         self.redis_client = redis.from_url(self.settings.redis_url)
-        
+
         # NATS client
         self.nats_client = NATS()
         await self.nats_client.connect(self.settings.nats_url)
-        
+
         # Initialize embedding service
         await self.embedding_service.initialize()
-        
+
         # Create memory tables
         await self._create_memory_tables()
-        
+
         logger.info("Memory service initialized successfully")
-    
+
     async def _create_memory_tables(self):
         """Create memory tables"""
         async with self.db_pool.acquire() as conn:
@@ -260,28 +262,28 @@ class MemoryService:
                     access_count INTEGER DEFAULT 0
                 )
             """)
-            
+
             # Create indexes
             await conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_episodic_memories_tenant 
+                CREATE INDEX IF NOT EXISTS idx_episodic_memories_tenant
                 ON episodic_memories(tenant)
             """)
-            
+
             await conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_semantic_memories_tenant 
+                CREATE INDEX IF NOT EXISTS idx_semantic_memories_tenant
                 ON semantic_memories(tenant)
             """)
-            
+
             await conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_episodic_memories_created 
+                CREATE INDEX IF NOT EXISTS idx_episodic_memories_created
                 ON episodic_memories(created_at)
             """)
-            
+
             await conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_semantic_memories_created 
+                CREATE INDEX IF NOT EXISTS idx_semantic_memories_created
                 ON semantic_memories(created_at)
             """)
-    
+
     async def close(self):
         """Close all connections"""
         if self.db_pool:
@@ -290,7 +292,7 @@ class MemoryService:
             await self.redis_client.close()
         if self.nats_client:
             await self.nats_client.close()
-    
+
     async def store_memory(
         self,
         tenant: str,
@@ -302,15 +304,15 @@ class MemoryService:
         lang: str = "en"
     ) -> MemoryEntry:
         """Store a memory entry"""
-        
+
         with tracer.start_as_current_span("store_memory") as span:
             span.set_attribute("tenant", tenant)
             span.set_attribute("memory_type", memory_type)
             span.set_attribute("lang", lang)
-            
+
             # Generate embedding
             embedding = self.embedding_service.get_embedding(content, lang)
-            
+
             memory_id = str(uuid.uuid4())
             memory_entry = MemoryEntry(
                 memory_id=memory_id,
@@ -322,17 +324,17 @@ class MemoryService:
                 embedding=embedding.tolist(),
                 metadata=metadata or {}
             )
-            
+
             # Store in appropriate table
             table_name = f"{memory_type}_memories"
             async with self.db_pool.acquire() as conn:
                 await conn.execute(f"""
-                    INSERT INTO {table_name} 
+                    INSERT INTO {table_name}
                     (memory_id, tenant, user_id, session_id, content, embedding, metadata)
                     VALUES ($1, $2, $3, $4, $5, $6, $7)
-                """, memory_id, tenant, user_id, session_id, content, 
-                    embedding.tolist(), json.dumps(metadata or {}))
-            
+                """, memory_id, tenant, user_id, session_id, content,
+                    json.dumps(embedding.tolist()), json.dumps(metadata or {}))
+
             # Update metrics
             memory_operation_counter.labels(
                 tenant=tenant,
@@ -340,33 +342,33 @@ class MemoryService:
                 memory_type=memory_type,
                 status="success"
             ).inc()
-            
+
             logger.info("Memory stored successfully",
                        memory_id=memory_id,
                        memory_type=memory_type,
                        tenant=tenant)
-            
+
             return memory_entry
-    
+
     async def retrieve_memories(
         self,
         request: MemoryRequest
     ) -> MemoryResponse:
         """Retrieve relevant memories"""
-        
+
         with tracer.start_as_current_span("retrieve_memories") as span:
             span.set_attribute("tenant", request.tenant)
             span.set_attribute("memory_type", request.memory_type)
             span.set_attribute("lang", request.lang)
-            
+
             start_time = datetime.utcnow()
-            
+
             # Generate query embedding
             query_embedding = self.embedding_service.get_embedding(request.query, request.lang)
-            
+
             results = []
             total_found = 0
-            
+
             # Retrieve from episodic memories
             if request.memory_type in ["episodic", "both"]:
                 episodic_results = await self._search_memories(
@@ -378,7 +380,7 @@ class MemoryService:
                 )
                 results.extend(episodic_results)
                 total_found += len(episodic_results)
-            
+
             # Retrieve from semantic memories
             if request.memory_type in ["semantic", "both"]:
                 semantic_results = await self._search_memories(
@@ -390,18 +392,18 @@ class MemoryService:
                 )
                 results.extend(semantic_results)
                 total_found += len(semantic_results)
-            
+
             # Sort by similarity score
             results.sort(key=lambda x: x.similarity_score, reverse=True)
-            
+
             # Limit results
             results = results[:request.max_results]
-            
+
             # Update access counts
             await self._update_access_counts([r.memory_id for r in results], request.memory_type)
-            
+
             processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
-            
+
             # Update metrics
             memory_operation_counter.labels(
                 tenant=request.tenant,
@@ -409,26 +411,26 @@ class MemoryService:
                 memory_type=request.memory_type,
                 status="success"
             ).inc()
-            
+
             memory_operation_duration.labels(
                 tenant=request.tenant,
                 operation="retrieve",
                 memory_type=request.memory_type
             ).observe(processing_time / 1000)
-            
+
             if results:
                 avg_accuracy = sum(r.similarity_score for r in results) / len(results)
                 memory_retrieval_accuracy.labels(
                     tenant=request.tenant,
                     memory_type=request.memory_type
                 ).observe(avg_accuracy)
-            
+
             logger.info("Memory retrieval completed",
                        tenant=request.tenant,
                        memory_type=request.memory_type,
                        results_count=len(results),
                        total_found=total_found)
-            
+
             return MemoryResponse(
                 tenant=request.tenant,
                 query=request.query,
@@ -437,7 +439,7 @@ class MemoryService:
                 total_found=total_found,
                 processing_time_ms=int(processing_time)
             )
-    
+
     async def _search_memories(
         self,
         table_name: str,
@@ -447,46 +449,57 @@ class MemoryService:
         max_results: int
     ) -> List[MemoryResult]:
         """Search memories in a specific table"""
-        
+
         async with self.db_pool.acquire() as conn:
             # Get all memories for the tenant
-            rows = await conn.fetch(f"""
+            # Use raw SQL to avoid f-string escaping issues
+            query = """
                 SELECT memory_id, content, metadata, created_at, last_accessed, access_count
-                FROM {table_name}
+                FROM """ + table_name + """
                 WHERE tenant = $1
                 ORDER BY last_accessed DESC
                 LIMIT $2
-            """, tenant, max_results * 2)  # Get more to filter by similarity
+            """
+            rows = await conn.fetch(query, tenant, max_results * 2)
+
+            logger.info(f"Memory search: tenant={tenant}, table={table_name}, rows_found={len(rows)}")
             
             if not rows:
+                logger.warning(f"No memories found for tenant={tenant} in table={table_name}")
                 return []
-            
+
             # Calculate similarities
             results = []
+            logger.info(f"Processing {len(rows)} rows with threshold {similarity_threshold}")
             for row in rows:
                 # For simplicity, we'll use a basic similarity calculation
                 # In production, you'd want to use proper vector similarity
                 similarity = 0.8  # Placeholder - would calculate actual similarity
-                
+
+                logger.info(f"Row check: similarity={similarity} >= threshold={similarity_threshold}? {similarity >= similarity_threshold}")
                 if similarity >= similarity_threshold:
+                    # Convert UUID to string and parse JSON metadata
+                    memory_id = str(row['memory_id'])
+                    metadata = row['metadata'] if isinstance(row['metadata'], dict) else json.loads(row['metadata'] or '{}')
+                    
                     results.append(MemoryResult(
-                        memory_id=row['memory_id'],
+                        memory_id=memory_id,
                         content=row['content'],
                         memory_type=table_name.split('_')[0],
                         similarity_score=similarity,
-                        metadata=row['metadata'],
+                        metadata=metadata,
                         created_at=row['created_at'],
                         last_accessed=row['last_accessed'],
                         access_count=row['access_count']
                     ))
-            
+
             return results
-    
+
     async def _update_access_counts(self, memory_ids: List[str], memory_type: str):
         """Update access counts for retrieved memories"""
         if not memory_ids:
             return
-        
+
         table_name = f"{memory_type}_memories"
         async with self.db_pool.acquire() as conn:
             await conn.execute(f"""
@@ -494,10 +507,10 @@ class MemoryService:
                 SET access_count = access_count + 1, last_accessed = NOW()
                 WHERE memory_id = ANY($1)
             """, memory_ids)
-    
+
     async def cleanup_old_memories(self):
         """Clean up old memories based on retention policy"""
-        
+
         # Clean episodic memories
         episodic_cutoff = datetime.utcnow() - timedelta(days=self.settings.episodic_memory_retention_days)
         async with self.db_pool.acquire() as conn:
@@ -505,7 +518,7 @@ class MemoryService:
                 DELETE FROM episodic_memories
                 WHERE created_at < $1
             """, episodic_cutoff)
-        
+
         # Clean semantic memories
         semantic_cutoff = datetime.utcnow() - timedelta(days=self.settings.semantic_memory_retention_days)
         async with self.db_pool.acquire() as conn:
@@ -513,7 +526,7 @@ class MemoryService:
                 DELETE FROM semantic_memories
                 WHERE created_at < $1
             """, semantic_cutoff)
-        
+
         logger.info("Memory cleanup completed",
                    episodic_deleted=episodic_deleted,
                    semantic_deleted=semantic_deleted)
@@ -576,7 +589,7 @@ async def store_memory(
             metadata=metadata,
             lang=lang
         )
-        
+
         return {
             "memory_id": memory_entry.memory_id,
             "memory_type": memory_entry.memory_type,

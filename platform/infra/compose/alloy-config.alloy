@@ -1,0 +1,142 @@
+// Grafana Alloy Configuration for HyperRAG
+// FINAL WORKING VERSION for v1.11.2
+
+// ===========================================
+// Prometheus Remote Write
+// ===========================================
+prometheus.remote_write "prometheus" {
+  endpoint {
+    url = "http://prometheus:9090/api/v1/write"
+  }
+}
+
+// ===========================================
+// Loki Write Endpoint
+// ===========================================
+loki.write "loki_endpoint" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+// ===========================================
+// OTEL Exporter: OTLP (to Tempo)
+// ===========================================
+otelcol.exporter.otlp "to_tempo" {
+  client {
+    endpoint = "tempo:4317"
+    tls {
+      insecure = true
+    }
+  }
+}
+
+// ===========================================
+// OTEL Exporter: Prometheus Remote Write
+// ===========================================
+otelcol.exporter.prometheus "to_prometheus" {
+  forward_to = [
+    prometheus.remote_write.prometheus.receiver,
+  ]
+}
+
+// ===========================================
+// OTEL Exporter: Loki (with processing)
+// ===========================================
+otelcol.exporter.loki "to_loki" {
+  forward_to = [
+    loki.process.extract_service.receiver,
+  ]
+}
+
+// ===========================================
+// OTEL Receiver: OTLP (GRPC + HTTP)
+// ===========================================
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+
+  output {
+    traces  = [otelcol.exporter.otlp.to_tempo.input]
+    metrics = [otelcol.exporter.prometheus.to_prometheus.input]
+    logs    = [otelcol.exporter.loki.to_loki.input]
+  }
+}
+
+// ===========================================
+// Loki Processing: Extract service_name
+// ===========================================
+loki.process "extract_service" {
+  forward_to = [loki.write.loki_endpoint.receiver]
+
+  stage.regex {
+    expression = `.*service_name=(?P<service_name>\w+).*`
+  }
+
+  stage.labels {
+    values = {
+      service = "service_name",
+    }
+  }
+}
+
+// ===========================================
+// Relabel for HyperRAG targets (using discovery.relabel)
+// ===========================================
+discovery.relabel "hyperrag_relabel" {
+  targets = [
+    {__address__ = "192.168.2.23:8000", job = "hyperrag_ingestor"},
+    {__address__ = "192.168.2.23:8001", job = "hyperrag_normalizer"},
+    {__address__ = "192.168.2.23:8002", job = "hyperrag_retriever"},
+    {__address__ = "192.168.2.23:8003", job = "hyperrag_chunker"},
+    {__address__ = "192.168.2.23:8004", job = "hyperrag_embedder"},
+    {__address__ = "192.168.2.23:8005", job = "hyperrag_evaluator"},
+    {__address__ = "192.168.2.23:8006", job = "hyperrag_agent_orch"},
+    {__address__ = "192.168.2.23:8007", job = "hyperrag_policy"},
+    {__address__ = "192.168.2.23:8008", job = "hyperrag_costing"},
+    {__address__ = "192.168.2.23:8009", job = "hyperrag_pack_longrag"},
+    {__address__ = "192.168.2.23:8010", job = "hyperrag_memory"},
+    {__address__ = "192.168.2.23:8011", job = "hyperrag_reranker"},
+  ]
+
+  rule {
+    source_labels = ["__address__"]
+    target_label  = "instance"
+  }
+}
+
+// ===========================================
+// Prometheus Scrape: HyperRAG Services (from relabel)
+// ===========================================
+prometheus.scrape "hyperrag_services" {
+  targets         = discovery.relabel.hyperrag_relabel.output
+  forward_to      = [prometheus.remote_write.prometheus.receiver]
+  scrape_interval = "10s"
+  scrape_timeout  = "5s"
+}
+
+// ===========================================
+// Docker Service Discovery
+// ===========================================
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "10s"
+}
+
+// ===========================================
+// System Metrics (Unix Exporter)
+// ===========================================
+prometheus.exporter.unix "system" {
+  include_exporter_metrics = true
+}
+
+prometheus.scrape "system_metrics" {
+  targets         = prometheus.exporter.unix.system.targets
+  forward_to      = [prometheus.remote_write.prometheus.receiver]
+  scrape_interval = "30s"
+  scrape_timeout  = "10s"
+}

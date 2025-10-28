@@ -22,6 +22,7 @@ from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.resources import Resource, SERVICE_NAME
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
@@ -61,7 +62,8 @@ structlog.configure(
 logger = structlog.get_logger()
 
 # Configure OpenTelemetry
-trace.set_tracer_provider(TracerProvider())
+resource = Resource.create(attributes={SERVICE_NAME: "hyperrag-chunker"})
+trace.set_tracer_provider(TracerProvider(resource=resource))
 tracer = trace.get_tracer(__name__)
 
 otlp_exporter = OTLPSpanExporter(endpoint="http://192.168.2.23:4317", insecure=True)
@@ -103,13 +105,13 @@ class Settings(BaseSettings):
     minio_bucket: str = "clean"
     service_name: str = "chunker"
     log_level: str = "INFO"
-    
+
     # Chunking parameters
     chunk_size: int = 1000
     chunk_overlap: int = 200
     max_chunk_size: int = 2000
     min_chunk_size: int = 100
-    
+
     class Config:
         env_file = ".env"
 
@@ -128,11 +130,11 @@ class ChunkingResult(BaseModel):
 
 class LanguageSpecificChunker:
     """Language-specific chunking utilities"""
-    
+
     def __init__(self, settings: Settings):
         self.settings = settings
         self.english_tokenizer = tiktoken.get_encoding("cl100k_base")
-        
+
         # Initialize text splitters
         self.english_splitter = RecursiveCharacterTextSplitter(
             chunk_size=settings.chunk_size,
@@ -140,27 +142,27 @@ class LanguageSpecificChunker:
             length_function=self._count_tokens_english,
             separators=["\n\n", "\n", ". ", "! ", "? ", " ", ""]
         )
-        
+
         self.persian_splitter = RecursiveCharacterTextSplitter(
             chunk_size=settings.chunk_size,
             chunk_overlap=settings.chunk_overlap,
             length_function=self._count_tokens_persian,
             separators=["\n\n", "\n", ". ", "! ", "? ", "، ", "؛ ", " ", ""]
         )
-    
+
     def _count_tokens_english(self, text: str) -> int:
         """Count tokens in English text using tiktoken"""
         return len(self.english_tokenizer.encode(text))
-    
+
     def _count_tokens_persian(self, text: str) -> int:
         """Count tokens in Persian text (approximation)"""
         # Simple approximation: 1 token ≈ 4 characters for Persian
         return len(text) // 4
-    
+
     def chunk_english_text(self, text: str) -> List[Dict]:
         """Chunk English text using RecursiveCharacterTextSplitter"""
         chunks = self.english_splitter.split_text(text)
-        
+
         result = []
         for i, chunk in enumerate(chunks):
             token_count = self._count_tokens_english(chunk)
@@ -171,29 +173,29 @@ class LanguageSpecificChunker:
                 'char_count': len(chunk),
                 'lang': 'en'
             })
-        
+
         return result
-    
+
     def chunk_persian_text(self, text: str) -> List[Dict]:
         """Chunk Persian text with language-specific considerations"""
         if PERSIAN_AVAILABLE:
             return self._chunk_persian_with_hazm(text)
         else:
             return self._chunk_persian_basic(text)
-    
+
     def _chunk_persian_with_hazm(self, text: str) -> List[Dict]:
         """Chunk Persian text using Hazm for better sentence segmentation"""
         # Split into sentences first
         sentences = sent_tokenize(text)
-        
+
         chunks = []
         current_chunk = ""
         current_tokens = 0
         chunk_index = 0
-        
+
         for sentence in sentences:
             sentence_tokens = self._count_tokens_persian(sentence)
-            
+
             # If adding this sentence would exceed chunk size, start a new chunk
             if current_tokens + sentence_tokens > self.settings.chunk_size and current_chunk:
                 chunks.append({
@@ -204,7 +206,7 @@ class LanguageSpecificChunker:
                     'lang': 'fa'
                 })
                 chunk_index += 1
-                
+
                 # Start new chunk with overlap
                 overlap_text = self._get_overlap_text(current_chunk, self.settings.chunk_overlap)
                 current_chunk = overlap_text + sentence
@@ -212,7 +214,7 @@ class LanguageSpecificChunker:
             else:
                 current_chunk += " " + sentence if current_chunk else sentence
                 current_tokens += sentence_tokens
-        
+
         # Add the last chunk
         if current_chunk.strip():
             chunks.append({
@@ -222,13 +224,13 @@ class LanguageSpecificChunker:
                 'char_count': len(current_chunk),
                 'lang': 'fa'
             })
-        
+
         return chunks
-    
+
     def _chunk_persian_basic(self, text: str) -> List[Dict]:
         """Basic Persian chunking without Hazm"""
         chunks = self.persian_splitter.split_text(text)
-        
+
         result = []
         for i, chunk in enumerate(chunks):
             token_count = self._count_tokens_persian(chunk)
@@ -239,19 +241,19 @@ class LanguageSpecificChunker:
                 'char_count': len(chunk),
                 'lang': 'fa'
             })
-        
+
         return result
-    
+
     def _get_overlap_text(self, text: str, overlap_tokens: int) -> str:
         """Get overlap text from the end of a chunk"""
         words = text.split()
         if len(words) <= overlap_tokens:
             return text
-        
+
         # Take the last overlap_tokens words
         overlap_words = words[-overlap_tokens:]
         return " ".join(overlap_words)
-    
+
     def chunk_text(self, text: str, lang: str) -> List[Dict]:
         """Chunk text based on language"""
         if lang == 'fa':
@@ -262,7 +264,7 @@ class LanguageSpecificChunker:
 
 class ChunkerService:
     """Main chunker service class"""
-    
+
     def __init__(self, settings: Settings):
         self.settings = settings
         self.db_pool: Optional[asyncpg.Pool] = None
@@ -270,7 +272,7 @@ class ChunkerService:
         self.nats_client: Optional[NATS] = None
         self.s3_client = None
         self.chunker = LanguageSpecificChunker(settings)
-        
+
     async def initialize(self):
         """Initialize database connections and clients"""
         # Database connection pool
@@ -279,14 +281,14 @@ class ChunkerService:
             min_size=5,
             max_size=20
         )
-        
+
         # Redis client
         self.redis_client = redis.from_url(self.settings.redis_url)
-        
+
         # NATS client
         self.nats_client = NATS()
         await self.nats_client.connect(self.settings.nats_url)
-        
+
         # S3/MinIO client
         endpoint_url = self.settings.minio_endpoint
         if not endpoint_url.startswith('http'):
@@ -300,7 +302,7 @@ class ChunkerService:
             region_name='us-east-1',
             use_ssl=False
         )
-        
+
         # Ensure bucket exists
         try:
             self.s3_client.head_bucket(Bucket=self.settings.minio_bucket)
@@ -312,9 +314,9 @@ class ChunkerService:
             except Exception as create_error:
                 logger.warning(f"Could not create bucket {self.settings.minio_bucket}: {create_error}")
                 # Continue without bucket creation
-            
+
         logger.info("Chunker service initialized successfully")
-    
+
     async def close(self):
         """Close all connections"""
         if self.db_pool:
@@ -323,7 +325,7 @@ class ChunkerService:
             await self.redis_client.close()
         if self.nats_client:
             await self.nats_client.close()
-    
+
     async def chunk_document(
         self,
         doc_id: str,
@@ -333,46 +335,46 @@ class ChunkerService:
         tenant: str
     ) -> ChunkingResult:
         """Chunk a document"""
-        
+
         with tracer.start_as_current_span("chunk_document") as span:
             span.set_attribute("doc_id", doc_id)
             span.set_attribute("version", version)
             span.set_attribute("lang", lang)
             span.set_attribute("tenant", tenant)
-            
+
             start_time = datetime.utcnow()
-            
+
             # Download cleaned document from S3
             bucket_name = uri_clean.split('/')[2]  # Extract bucket from s3://bucket/key
             key = '/'.join(uri_clean.split('/')[3:])  # Extract key
-            
+
             response = self.s3_client.get_object(Bucket=bucket_name, Key=key)
             clean_content = response['Body'].read().decode('utf-8')
-            
+
             # Chunk the text
             chunks = self.chunker.chunk_text(clean_content, lang)
-            
+
             # Calculate total tokens
             total_tokens = sum(chunk['token_count'] for chunk in chunks)
-            
+
             # Store chunks in database
             async with self.db_pool.acquire() as conn:
                 # Insert chunks
                 for chunk in chunks:
                     await conn.execute("""
-                        INSERT INTO document_chunks 
+                        INSERT INTO document_chunks
                         (doc_id, version, chunk_id, chunk_index, content, lang, token_count, metadata)
                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                    """, doc_id, int(version), f"{doc_id}-{chunk['chunk_index']}", chunk['chunk_index'], chunk['content'], 
+                    """, doc_id, int(version), f"{doc_id}-{chunk['chunk_index']}", chunk['chunk_index'], chunk['content'],
                         lang, chunk['token_count'], json.dumps({'char_count': chunk['char_count']}))
-                
+
                 # Update document version with chunk count
                 await conn.execute("""
-                    UPDATE document_versions 
+                    UPDATE document_versions
                     SET chunk_count = $1, processing_status = 'chunked'
                     WHERE doc_id = $2 AND version = $3
                 """, len(chunks), doc_id, int(version))
-            
+
             # Upload chunked data to S3
             chunked_data = {
                 'doc_id': doc_id,
@@ -387,10 +389,10 @@ class ChunkerService:
                     'chunker_version': '1.0.0'
                 }
             }
-            
+
             chunked_key = f"{tenant}/chunked/{doc_id}/{version}"
             uri_processed = f"s3://{self.settings.minio_bucket}/{chunked_key}"
-            
+
             self.s3_client.put_object(
                 Bucket=self.settings.minio_bucket,
                 Key=chunked_key,
@@ -404,9 +406,9 @@ class ChunkerService:
                     'chunk_count': str(len(chunks))
                 }
             )
-            
+
             processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
-            
+
             # Create CloudEvent
             event = {
                 "specversion": "1.0",
@@ -427,7 +429,7 @@ class ChunkerService:
                     "processing_time_ms": int(processing_time)
                 }
             }
-            
+
             # Publish event to NATS
             event_data = json.dumps({
                 "specversion": event["specversion"],
@@ -438,12 +440,12 @@ class ChunkerService:
                 "datacontenttype": event["datacontenttype"],
                 "data": event["data"]
             })
-            
+
             await self.nats_client.publish("doc.chunked.v1", str(event_data).encode())
-            
-            logger.info("Document chunked successfully", 
+
+            logger.info("Document chunked successfully",
                        doc_id=doc_id, version=version, chunks_count=len(chunks))
-            
+
             return ChunkingResult(
                 doc_id=doc_id,
                 version=version,
@@ -501,7 +503,7 @@ async def chunk_document(
     tenant: str
 ):
     """Chunk a document"""
-    
+
     with chunking_duration.labels(
         tenant=tenant,
         lang=lang,
@@ -511,20 +513,20 @@ async def chunk_document(
             result = await chunker_service.chunk_document(
                 doc_id, version, uri_clean, lang, tenant
             )
-            
+
             chunking_counter.labels(
                 tenant=tenant,
                 lang=lang,
                 content_type="text/plain",
                 status="success"
             ).inc()
-            
+
             chunks_created.labels(
                 tenant=tenant,
                 lang=lang,
                 content_type="text/plain"
             ).observe(result.total_chunks)
-            
+
             return result
         except Exception as e:
             logger.error("Document chunking failed", error=str(e), doc_id=doc_id)

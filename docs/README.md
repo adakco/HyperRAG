@@ -100,6 +100,7 @@
 
 ### برای DevOps
 - راه‌اندازی: [Execution-Checklist.md](Execution-Checklist.md)
+- **Alloy Integration**: [Alloy-Integration-Guide.md](Alloy-Integration-Guide.md) ⭐ جدید
 - مستندات Infra: [../platform/infra/](../platform/infra/)
 - Playbooks: [../platform/ops/](../platform/ops/)
 

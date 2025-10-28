@@ -20,6 +20,7 @@ from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.resources import Resource, SERVICE_NAME
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
@@ -51,7 +52,8 @@ structlog.configure(
 logger = structlog.get_logger()
 
 # Configure OpenTelemetry
-trace.set_tracer_provider(TracerProvider())
+resource = Resource.create(attributes={SERVICE_NAME: "hyperrag-reranker"})
+trace.set_tracer_provider(TracerProvider(resource=resource))
 tracer = trace.get_tracer(__name__)
 
 otlp_exporter = OTLPSpanExporter(endpoint="http://192.168.2.23:4317", insecure=True)
@@ -89,13 +91,13 @@ class Settings(BaseSettings):
     nats_url: str = "nats://192.168.2.23:4222"
     service_name: str = "reranker"
     log_level: str = "INFO"
-    
+
     # Re-ranking models
     persian_rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     english_rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     batch_size: int = 32
     max_sequence_length: int = 512
-    
+
     class Config:
         env_file = ".env"
 
@@ -131,7 +133,7 @@ class RerankResponse(BaseModel):
 
 class RerankerService:
     """Main reranker service class"""
-    
+
     def __init__(self, settings: Settings):
         self.settings = settings
         self.db_pool: Optional[asyncpg.Pool] = None
@@ -139,7 +141,7 @@ class RerankerService:
         self.nats_client: Optional[NATS] = None
         self.persian_model = None
         self.english_model = None
-        
+
     async def initialize(self):
         """Initialize database connections and clients"""
         # Database connection pool
@@ -148,25 +150,25 @@ class RerankerService:
             min_size=5,
             max_size=20
         )
-        
+
         # Redis client
         self.redis_client = redis.from_url(self.settings.redis_url)
-        
+
         # NATS client
         self.nats_client = NATS()
         await self.nats_client.connect(self.settings.nats_url)
-        
+
         # Initialize re-ranking models
         await self._initialize_models()
-        
+
         logger.info("Reranker service initialized successfully")
-    
+
     async def _initialize_models(self):
         """Initialize re-ranking models (disabled - CrossEncoder not available)"""
         logger.info("Re-ranking models disabled (CrossEncoder not available)")
         self.persian_model = None
         self.english_model = None
-    
+
     async def close(self):
         """Close all connections"""
         if self.db_pool:
@@ -175,26 +177,26 @@ class RerankerService:
             await self.redis_client.close()
         if self.nats_client:
             await self.nats_client.close()
-    
+
     async def rerank_documents(
         self,
         request: RerankRequest
     ) -> RerankResponse:
         """Rerank documents based on query relevance"""
-        
+
         with tracer.start_as_current_span("rerank_documents") as span:
             span.set_attribute("query", request.query)
             span.set_attribute("lang", request.lang)
             span.set_attribute("tenant", request.tenant)
             span.set_attribute("document_count", len(request.documents))
-            
+
             start_time = datetime.utcnow()
-            
+
             # Simplified reranking (CrossEncoder not available)
             import random
             model_name = "simplified_reranker"
             scores = [random.random() for _ in request.documents]
-            
+
             # Create results with scores
             results = []
             for i, (doc, score) in enumerate(zip(request.documents, scores)):
@@ -204,20 +206,20 @@ class RerankerService:
                     rank=0,  # Will be set after sorting
                     original_rank=i
                 ))
-            
+
             # Sort by score (descending)
             results.sort(key=lambda x: x.score, reverse=True)
-            
+
             # Set final ranks
             for i, result in enumerate(results):
                 result.rank = i + 1
-            
+
             # Apply top_k filter if specified
             if request.top_k:
                 results = results[:request.top_k]
-            
+
             processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
-            
+
             # Update metrics
             reranking_counter.labels(
                 tenant=request.tenant,
@@ -225,13 +227,13 @@ class RerankerService:
                 model=model_name,
                 status="success"
             ).inc()
-            
+
             reranking_duration.labels(
                 tenant=request.tenant,
                 lang=request.lang,
                 model=model_name
             ).observe(processing_time / 1000)
-            
+
             if results:
                 avg_quality = sum(r.score for r in results) / len(results)
                 reranking_quality.labels(
@@ -239,13 +241,13 @@ class RerankerService:
                     lang=request.lang,
                     model=model_name
                 ).observe(avg_quality)
-            
+
             logger.info("Document reranking completed successfully",
                        query_length=len(request.query),
                        document_count=len(request.documents),
                        results_count=len(results),
                        processing_time_ms=processing_time)
-            
+
             return RerankResponse(
                 query=request.query,
                 lang=request.lang,

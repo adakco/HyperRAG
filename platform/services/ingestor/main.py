@@ -22,6 +22,7 @@ from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.resources import Resource, SERVICE_NAME
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
@@ -51,7 +52,8 @@ structlog.configure(
 logger = structlog.get_logger()
 
 # Configure OpenTelemetry
-trace.set_tracer_provider(TracerProvider())
+resource = Resource.create(attributes={SERVICE_NAME: "hyperrag-ingestor"})
+trace.set_tracer_provider(TracerProvider(resource=resource))
 tracer = trace.get_tracer(__name__)
 
 otlp_exporter = OTLPSpanExporter(endpoint="http://192.168.2.23:4317", insecure=True)
@@ -68,7 +70,7 @@ ingestion_counter = Counter(
 )
 
 ingestion_duration = Histogram(
-    
+
     'hyperrag_ingestion_duration_seconds',
     'Time spent processing document ingestion',
     ['tenant', 'lang', 'content_type'],
@@ -76,7 +78,7 @@ ingestion_duration = Histogram(
 )
 
 file_size_bytes = Histogram(
-    
+
     'hyperrag_ingestion_file_size_bytes',
     'Size of ingested files in bytes',
     ['tenant', 'content_type'],
@@ -95,7 +97,7 @@ class Settings(BaseSettings):
     minio_bucket: str = "raw"
     service_name: str = "ingestor"
     log_level: str = "INFO"
-    
+
     class Config:
         env_file = ".env"
 
@@ -125,14 +127,14 @@ class DocumentIngestionResponse(BaseModel):
 
 class IngestorService:
     """Main ingestor service class"""
-    
+
     def __init__(self, settings: Settings):
         self.settings = settings
         self.db_pool: Optional[asyncpg.Pool] = None
         self.redis_client: Optional[redis.Redis] = None
         self.nats_client: Optional[NATS] = None
         self.s3_client = None
-        
+
     async def initialize(self):
         """Initialize database connections and clients"""
         # Database connection pool
@@ -141,14 +143,14 @@ class IngestorService:
             min_size=5,
             max_size=20
         )
-        
+
         # Redis client
         self.redis_client = redis.from_url(self.settings.redis_url)
-        
+
         # NATS client
         self.nats_client = NATS()
         await self.nats_client.connect(self.settings.nats_url)
-        
+
         # S3/MinIO client
         endpoint_url = self.settings.minio_endpoint
         if not endpoint_url.startswith('http'):
@@ -162,7 +164,7 @@ class IngestorService:
             region_name='us-east-1',
             use_ssl=False
         )
-        
+
         # Ensure bucket exists (skip if access denied)
         try:
             self.s3_client.head_bucket(Bucket=self.settings.minio_bucket)
@@ -174,9 +176,9 @@ class IngestorService:
             except Exception as create_error:
                 logger.warning(f"Could not create bucket {self.settings.minio_bucket}: {create_error}")
                 # Continue without bucket creation
-            
+
         logger.info("Ingestor service initialized successfully")
-    
+
     async def close(self):
         """Close all connections"""
         if self.db_pool:
@@ -185,7 +187,7 @@ class IngestorService:
             await self.redis_client.close()
         if self.nats_client:
             await self.nats_client.close()
-    
+
     async def ingest_document(
         self,
         request: DocumentIngestionRequest,
@@ -193,32 +195,32 @@ class IngestorService:
         content_type: str
     ) -> DocumentIngestionResponse:
         """Ingest a document and trigger processing pipeline"""
-        
+
         with tracer.start_as_current_span("ingest_document") as span:
             span.set_attribute("doc_id", request.doc_id)
             span.set_attribute("tenant", request.tenant)
             span.set_attribute("lang", request.lang)
             span.set_attribute("content_type", content_type)
-            
+
             trace_id = str(span.get_span_context().trace_id)
-            
+
             # Generate version and file paths
             version = int(datetime.utcnow().timestamp())
             file_key = f"{request.tenant}/{request.project}/{request.doc_id}/{version}"
             uri_raw = f"s3://{self.settings.minio_bucket}/{file_key}"
-            
+
             # Calculate file hash and size
             import hashlib
             sha256_hash = hashlib.sha256(file_content).hexdigest()
             file_size = len(file_content)
-            
+
             # Check for duplicate
             async with self.db_pool.acquire() as conn:
                 existing = await conn.fetchrow(
                     "SELECT version FROM document_versions WHERE doc_id = $1 AND sha256 = $2",
                     request.doc_id, sha256_hash
                 )
-                
+
                 if existing:
                     logger.info("Duplicate document detected", doc_id=request.doc_id, sha256=sha256_hash)
                     return DocumentIngestionResponse(
@@ -230,7 +232,7 @@ class IngestorService:
                         file_size=file_size,
                         trace_id=trace_id
                     )
-            
+
             # Upload to S3/MinIO
             self.s3_client.put_object(
                 Bucket=self.settings.minio_bucket,
@@ -245,7 +247,7 @@ class IngestorService:
                     'version': str(version)
                 }
             )
-            
+
             # Store metadata in database
             async with self.db_pool.acquire() as conn:
                 # Insert or update document
@@ -255,16 +257,16 @@ class IngestorService:
                     ON CONFLICT (doc_id) DO UPDATE SET
                         latest_version = $8,
                         updated_at = NOW()
-                """, request.doc_id, request.tenant, request.project, request.lang, 
+                """, request.doc_id, request.tenant, request.project, request.lang,
                     request.title, content_type, file_size, version)
-                
+
                 # Insert document version
                 await conn.execute("""
-                    INSERT INTO document_versions 
+                    INSERT INTO document_versions
                     (doc_id, version, sha256, uri_raw, lang, processing_status)
                     VALUES ($1, $2, $3, $4, $5, $6)
                 """, request.doc_id, version, sha256_hash, uri_raw, request.lang, "pending")
-            
+
             # Create event dict (avoiding CloudEvent object issues)
             event = {
                 "specversion": str("1.0"),
@@ -290,7 +292,7 @@ class IngestorService:
                     "processing_status": str("pending")
                 }
             }
-            
+
             # Publish event to NATS
             try:
                 event_message = json.dumps(event, default=str)
@@ -302,7 +304,7 @@ class IngestorService:
                 await self.nats_client.publish("doc.ingested.v1", event_message_bytes)
             except Exception as e:
                 logger.warning("Failed to publish to NATS", error=str(e))
-            
+
             # Store event in database for audit
             async with self.db_pool.acquire() as conn:
                 await conn.execute("""
@@ -311,7 +313,7 @@ class IngestorService:
                     VALUES ($1, $2, $3, $4, $5, $6)
                 """, event["specversion"], event["source"], event["type"],
                     datetime.utcnow(), event["datacontenttype"], json.dumps(event["data"], default=str))
-            
+
             # Update metrics
             ingestion_counter.labels(
                 tenant=request.tenant,
@@ -319,15 +321,15 @@ class IngestorService:
                 content_type=content_type,
                 status="success"
             ).inc()
-            
+
             file_size_bytes.labels(
                 tenant=request.tenant,
                 content_type=content_type
             ).observe(file_size)
-            
-            logger.info("Document ingested successfully", 
+
+            logger.info("Document ingested successfully",
                        doc_id=request.doc_id, version=version, tenant=request.tenant)
-            
+
             return DocumentIngestionResponse(
                 doc_id=request.doc_id,
                 version=version,
@@ -388,23 +390,23 @@ async def ingest_document(
     file: UploadFile = File(...)
 ):
     """Ingest a document file"""
-    
+
     # Parse JSON fields
     tags_list = []
     acl_list = []
-    
+
     if tags:
         try:
             tags_list = json.loads(tags)
         except json.JSONDecodeError:
             raise HTTPException(status_code=400, detail="Invalid tags JSON")
-    
+
     if acl:
         try:
             acl_list = json.loads(acl)
         except json.JSONDecodeError:
             raise HTTPException(status_code=400, detail="Invalid ACL JSON")
-    
+
     # Create request object
     request = DocumentIngestionRequest(
         doc_id=doc_id,
@@ -416,10 +418,10 @@ async def ingest_document(
         tags=tags_list,
         acl=acl_list
     )
-    
+
     # Read file content
     file_content = await file.read()
-    
+
     # Process ingestion
     with ingestion_duration.labels(
         tenant=tenant,
@@ -464,10 +466,10 @@ async def get_document_status(doc_id: str):
             LEFT JOIN document_versions dv ON d.doc_id = dv.doc_id AND d.latest_version = dv.version
             WHERE d.doc_id = $1
         """, doc_id)
-        
+
         if not result:
             raise HTTPException(status_code=404, detail="Document not found")
-        
+
         return {
             "doc_id": result["doc_id"],
             "version": result["latest_version"],

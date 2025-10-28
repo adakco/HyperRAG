@@ -20,6 +20,7 @@ from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.resources import Resource, SERVICE_NAME
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
@@ -51,7 +52,8 @@ structlog.configure(
 logger = structlog.get_logger()
 
 # Configure OpenTelemetry
-trace.set_tracer_provider(TracerProvider())
+resource = Resource.create(attributes={SERVICE_NAME: "hyperrag-pack-longrag"})
+trace.set_tracer_provider(TracerProvider(resource=resource))
 tracer = trace.get_tracer(__name__)
 
 otlp_exporter = OTLPSpanExporter(endpoint="http://192.168.2.23:4317", insecure=True)
@@ -89,17 +91,17 @@ class Settings(BaseSettings):
     nats_url: str = "nats://192.168.2.23:4222"
     service_name: str = "pack.longrag"
     log_level: str = "INFO"
-    
+
     # Packing parameters
     max_pack_size: int = 4000  # tokens
     min_pack_size: int = 1000  # tokens
     overlap_size: int = 200    # tokens
     summary_ratio: float = 0.3  # 30% of original size
-    
+
     # Summarization models
     english_summarizer: str = "facebook/bart-large-cnn"
     persian_summarizer: str = "m3hrdadfi/bert2bert-fa-wiki-summary"
-    
+
     class Config:
         env_file = ".env"
 
@@ -138,17 +140,17 @@ class PackResponse(BaseModel):
 
 class TextSummarizer:
     """Text summarization utilities"""
-    
+
     def __init__(self, settings: Settings):
         self.settings = settings
         self.english_summarizer = None
         self.persian_summarizer = None
         self.tokenizer = tiktoken.get_encoding("cl100k_base")
-        
+
     async def initialize(self):
         """Initialize summarization models"""
         logger.info("Loading summarization models...")
-        
+
         try:
             # Load English summarizer
             self.english_summarizer = pipeline(
@@ -161,7 +163,7 @@ class TextSummarizer:
             logger.error("Failed to load English summarizer", error=str(e))
             # Fallback to simple truncation
             self.english_summarizer = None
-        
+
         try:
             # Load Persian summarizer
             self.persian_summarizer = pipeline(
@@ -174,11 +176,11 @@ class TextSummarizer:
             logger.error("Failed to load Persian summarizer", error=str(e))
             # Fallback to simple truncation
             self.persian_summarizer = None
-    
+
     def count_tokens(self, text: str) -> int:
         """Count tokens in text"""
         return len(self.tokenizer.encode(text))
-    
+
     def summarize_text(self, text: str, lang: str, max_length: int = 100) -> str:
         """Summarize text based on language"""
         if lang == 'fa' and self.persian_summarizer:
@@ -197,36 +199,36 @@ class TextSummarizer:
                 return self._truncate_text(text, max_length)
         else:
             return self._truncate_text(text, max_length)
-    
+
     def _truncate_text(self, text: str, max_tokens: int) -> str:
         """Simple text truncation as fallback"""
         tokens = self.tokenizer.encode(text)
         if len(tokens) <= max_tokens:
             return text
-        
+
         truncated_tokens = tokens[:max_tokens]
         return self.tokenizer.decode(truncated_tokens)
 
 
 class ContextPacker:
     """Context packing utilities"""
-    
+
     def __init__(self, settings: Settings, summarizer: TextSummarizer):
         self.settings = settings
         self.summarizer = summarizer
-    
+
     def calculate_relevance_score(self, query: str, context: str, lang: str) -> float:
         """Calculate relevance score between query and context"""
         # Simple relevance calculation based on word overlap
         query_words = set(query.lower().split())
         context_words = set(context.lower().split())
-        
+
         if not query_words:
             return 0.0
-        
+
         overlap = len(query_words.intersection(context_words))
         return overlap / len(query_words)
-    
+
     def pack_contexts(
         self,
         query: str,
@@ -237,31 +239,31 @@ class ContextPacker:
         priority_chunks: Optional[List[int]] = None
     ) -> List[PackResult]:
         """Pack contexts into optimal packs"""
-        
+
         # Calculate relevance scores
         context_scores = []
         for i, context in enumerate(contexts):
             score = self.calculate_relevance_score(query, context, lang)
             context_scores.append((i, context, score))
-        
+
         # Sort by relevance (and priority if specified)
         if priority_chunks:
             # Boost priority chunks
             for i, (idx, context, score) in enumerate(context_scores):
                 if idx in priority_chunks:
                     context_scores[i] = (idx, context, score * 1.5)
-        
+
         context_scores.sort(key=lambda x: x[2], reverse=True)
-        
+
         # Pack contexts
         packs = []
         current_pack_tokens = 0
         current_pack_content = []
         current_pack_indices = []
-        
+
         for idx, context, score in context_scores:
             context_tokens = self.summarizer.count_tokens(context)
-            
+
             # Check if adding this context would exceed max tokens
             if current_pack_tokens + context_tokens > max_tokens:
                 # Finalize current pack
@@ -275,7 +277,7 @@ class ContextPacker:
                         packed_length=self.summarizer.count_tokens(pack_content),
                         relevance_score=score
                     ))
-                
+
                 # Start new pack
                 current_pack_content = [context]
                 current_pack_indices = [idx]
@@ -285,7 +287,7 @@ class ContextPacker:
                 current_pack_content.append(context)
                 current_pack_indices.append(idx)
                 current_pack_tokens += context_tokens
-        
+
         # Add final pack
         if current_pack_content:
             pack_content = " ".join(current_pack_content)
@@ -297,7 +299,7 @@ class ContextPacker:
                 packed_length=self.summarizer.count_tokens(pack_content),
                 relevance_score=score
             ))
-        
+
         # Create summaries if requested
         if include_summaries and len(packs) > 1:
             summary_packs = []
@@ -316,16 +318,16 @@ class ContextPacker:
                         packed_length=self.summarizer.count_tokens(summary),
                         relevance_score=pack.relevance_score
                     ))
-            
+
             # Combine original packs with summaries
             packs = packs + summary_packs
-        
+
         return packs
 
 
 class PackLongRAGService:
     """Main pack longrag service class"""
-    
+
     def __init__(self, settings: Settings):
         self.settings = settings
         self.db_pool: Optional[asyncpg.Pool] = None
@@ -333,7 +335,7 @@ class PackLongRAGService:
         self.nats_client: Optional[NATS] = None
         self.summarizer = TextSummarizer(settings)
         self.packer = None
-        
+
     async def initialize(self):
         """Initialize database connections and clients"""
         # Database connection pool
@@ -342,22 +344,22 @@ class PackLongRAGService:
             min_size=5,
             max_size=20
         )
-        
+
         # Redis client
         self.redis_client = redis.from_url(self.settings.redis_url)
-        
+
         # NATS client
         self.nats_client = NATS()
         await self.nats_client.connect(self.settings.nats_url)
-        
+
         # Initialize summarizer
         await self.summarizer.initialize()
-        
+
         # Initialize packer
         self.packer = ContextPacker(self.settings, self.summarizer)
-        
+
         logger.info("Pack LongRAG service initialized successfully")
-    
+
     async def close(self):
         """Close all connections"""
         if self.db_pool:
@@ -366,21 +368,21 @@ class PackLongRAGService:
             await self.redis_client.close()
         if self.nats_client:
             await self.nats_client.close()
-    
+
     async def pack_contexts(
         self,
         request: PackRequest
     ) -> PackResponse:
         """Pack contexts for long RAG"""
-        
+
         with tracer.start_as_current_span("pack_contexts") as span:
             span.set_attribute("query", request.query)
             span.set_attribute("lang", request.lang)
             span.set_attribute("tenant", request.tenant)
             span.set_attribute("context_count", len(request.contexts))
-            
+
             start_time = datetime.utcnow()
-            
+
             # Pack contexts
             packs = self.packer.pack_contexts(
                 query=request.query,
@@ -390,37 +392,37 @@ class PackLongRAGService:
                 include_summaries=request.include_summaries,
                 priority_chunks=request.priority_chunks
             )
-            
+
             # Calculate efficiency
             total_original_tokens = sum(pack.original_length for pack in packs)
             total_packed_tokens = sum(pack.packed_length for pack in packs)
             efficiency_ratio = total_packed_tokens / total_original_tokens if total_original_tokens > 0 else 0
-            
+
             processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
-            
+
             # Update metrics
             packing_counter.labels(
                 tenant=request.tenant,
                 lang=request.lang,
                 status="success"
             ).inc()
-            
+
             packing_duration.labels(
                 tenant=request.tenant,
                 lang=request.lang
             ).observe(processing_time / 1000)
-            
+
             pack_efficiency.labels(
                 tenant=request.tenant,
                 lang=request.lang
             ).observe(efficiency_ratio)
-            
+
             logger.info("Context packing completed successfully",
                        query_length=len(request.query),
                        context_count=len(request.contexts),
                        pack_count=len(packs),
                        efficiency_ratio=efficiency_ratio)
-            
+
             return PackResponse(
                 query=request.query,
                 lang=request.lang,

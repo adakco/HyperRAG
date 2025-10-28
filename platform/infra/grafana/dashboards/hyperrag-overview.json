@@ -1,101 +1,201 @@
 {
-  "dashboard": {
-    "id": null,
-    "title": "HyperRAG System Overview",
-    "tags": ["hyperrag", "overview"],
-    "style": "dark",
-    "timezone": "browser",
-    "panels": [
-      {
-        "id": 1,
-        "title": "Service Health",
-        "type": "stat",
-        "targets": [
-          {
-            "expr": "up{job=~\"hyperrag-.*\"}",
-            "legendFormat": "{{instance}}"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "thresholds"
-            },
-            "thresholds": {
-              "steps": [
-                {"color": "red", "value": 0},
-                {"color": "green", "value": 1}
-              ]
-            }
-          }
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": 0},
+              {"color": "green", "value": 1}
+            ]
+          },
+          "unit": "percent"
         },
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+        "overrides": []
       },
-      {
-        "id": 2,
-        "title": "Request Rate",
-        "type": "graph",
-        "targets": [
-          {
-            "expr": "rate(hyperrag_ingestion_total[5m])",
-            "legendFormat": "Ingestion - {{tenant}}"
-          },
-          {
-            "expr": "rate(hyperrag_retrieval_total[5m])",
-            "legendFormat": "Retrieval - {{tenant}}"
-          },
-          {
-            "expr": "rate(hyperrag_agent_sessions_total[5m])",
-            "legendFormat": "Agent Sessions - {{tenant}}"
-          }
-        ],
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
       },
-      {
-        "id": 3,
-        "title": "Response Time (p95)",
-        "type": "graph",
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, rate(hyperrag_ingestion_duration_seconds_bucket[5m]))",
-            "legendFormat": "Ingestion p95"
-          },
-          {
-            "expr": "histogram_quantile(0.95, rate(hyperrag_retrieval_duration_seconds_bucket[5m]))",
-            "legendFormat": "Retrieval p95"
-          },
-          {
-            "expr": "histogram_quantile(0.95, rate(hyperrag_agent_duration_seconds_bucket[5m]))",
-            "legendFormat": "Agent p95"
-          }
-        ],
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
-      },
-      {
-        "id": 4,
-        "title": "Error Rate",
-        "type": "graph",
-        "targets": [
-          {
-            "expr": "rate(hyperrag_ingestion_total{status=\"error\"}[5m]) / rate(hyperrag_ingestion_total[5m])",
-            "legendFormat": "Ingestion Error Rate"
-          },
-          {
-            "expr": "rate(hyperrag_retrieval_total{status=\"error\"}[5m]) / rate(hyperrag_retrieval_total[5m])",
-            "legendFormat": "Retrieval Error Rate"
-          },
-          {
-            "expr": "rate(hyperrag_agent_sessions_total{status=\"failed\"}[5m]) / rate(hyperrag_agent_sessions_total[5m])",
-            "legendFormat": "Agent Error Rate"
-          }
-        ],
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
-      }
-    ],
-    "time": {
-      "from": "now-1h",
-      "to": "now"
+      "pluginVersion": "12.0.0",
+      "targets": [
+        {
+          "expr": "up{job=~\"hyperrag-.*\"}",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Service Health",
+      "type": "stat"
     },
-    "refresh": "30s"
-  }
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "fillOpacity": 10,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5
+          },
+          "mappings": [],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]},
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "id": 2,
+      "options": {
+        "legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom"},
+        "tooltip": {"mode": "multi", "sort": "none"}
+      },
+      "pluginVersion": "12.0.0",
+      "targets": [
+        {
+          "expr": "rate(hyperrag_ingestion_total[5m])",
+          "legendFormat": "Ingestion",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(hyperrag_retrieval_total[5m])",
+          "legendFormat": "Retrieval",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(hyperrag_agent_sessions_total[5m])",
+          "legendFormat": "Agent Sessions",
+          "refId": "C"
+        }
+      ],
+      "title": "Request Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "fillOpacity": 10,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5
+          },
+          "mappings": [],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]},
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "id": 3,
+      "options": {
+        "legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom"},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      },
+      "pluginVersion": "12.0.0",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(hyperrag_ingestion_duration_seconds_bucket[5m]))",
+          "legendFormat": "Ingestion p95",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(hyperrag_retrieval_duration_seconds_bucket[5m]))",
+          "legendFormat": "Retrieval p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(hyperrag_agent_duration_seconds_bucket[5m]))",
+          "legendFormat": "Agent p95",
+          "refId": "C"
+        }
+      ],
+      "title": "Response Time (p95)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "fillOpacity": 10,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5
+          },
+          "mappings": [],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}]},
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "id": 4,
+      "options": {
+        "legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom"},
+        "tooltip": {"mode": "multi", "sort": "none"}
+      },
+      "pluginVersion": "12.0.0",
+      "targets": [
+        {
+          "expr": "rate(hyperrag_ingestion_total{status=\"error\"}[5m]) / rate(hyperrag_ingestion_total[5m])",
+          "legendFormat": "Ingestion Error Rate",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(hyperrag_retrieval_total{status=\"error\"}[5m]) / rate(hyperrag_retrieval_total[5m])",
+          "legendFormat": "Retrieval Error Rate",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(hyperrag_agent_sessions_total{status=\"failed\"}[5m]) / rate(hyperrag_agent_sessions_total[5m])",
+          "legendFormat": "Agent Error Rate",
+          "refId": "C"
+        }
+      ],
+      "title": "Error Rate",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["hyperrag", "overview"],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "HyperRAG System Overview",
+  "uid": "hyperrag-overview",
+  "version": 0
 }

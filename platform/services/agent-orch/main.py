@@ -21,6 +21,7 @@ from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.resources import Resource, SERVICE_NAME
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
@@ -54,7 +55,8 @@ structlog.configure(
 logger = structlog.get_logger()
 
 # Configure OpenTelemetry
-trace.set_tracer_provider(TracerProvider())
+resource = Resource.create(attributes={SERVICE_NAME: "hyperrag-agent-orch"})
+trace.set_tracer_provider(TracerProvider(resource=resource))
 tracer = trace.get_tracer(__name__)
 
 otlp_exporter = OTLPSpanExporter(endpoint="http://192.168.2.23:4317", insecure=True)
@@ -129,7 +131,7 @@ class Settings(BaseSettings):
     # MCP tool endpoints - Updated to run on host
     retriever_url: str = "http://localhost:8002"
     evaluator_url: str = "http://localhost:8005"
-    
+
     class Config:
         env_file = ".env"
 
@@ -170,14 +172,14 @@ class AgentStep(BaseModel):
 
 class MCPTool:
     """MCP Tool abstraction"""
-    
+
     def __init__(self, name: str, url: str, input_schema: Dict, output_schema: Dict):
         self.name = name
         self.url = url
         self.input_schema = input_schema
         self.output_schema = output_schema
         self.client = httpx.AsyncClient(timeout=30.0)
-    
+
     async def invoke(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Invoke the MCP tool"""
         # Validate input
@@ -185,21 +187,21 @@ class MCPTool:
             validate(input_data, self.input_schema)
         except jsonschema.ValidationError as e:
             raise ValueError(f"Invalid input for {self.name}: {e.message}")
-        
+
         # Make request
         response = await self.client.post(f"{self.url}/invoke", json=input_data)
         response.raise_for_status()
-        
+
         result = response.json()
-        
+
         # Validate output
         try:
             validate(result, self.output_schema)
         except jsonschema.ValidationError as e:
             logger.warning(f"Output validation failed for {self.name}: {e.message}")
-        
+
         return result
-    
+
     async def close(self):
         """Close the HTTP client"""
         await self.client.aclose()
@@ -207,14 +209,14 @@ class MCPTool:
 
 class AgentOrchestrator:
     """Main agent orchestrator class"""
-    
+
     def __init__(self, settings: Settings):
         self.settings = settings
         self.db_pool: Optional[asyncpg.Pool] = None
         self.redis_client: Optional[redis.Redis] = None
         self.nats_client: Optional[NATS] = None
         self.tools: Dict[str, MCPTool] = {}
-        
+
     async def initialize(self):
         """Initialize database connections and clients"""
         # Database connection pool
@@ -223,19 +225,19 @@ class AgentOrchestrator:
             min_size=5,
             max_size=20
         )
-        
+
         # Redis client
         self.redis_client = redis.from_url(self.settings.redis_url)
-        
+
         # NATS client
         self.nats_client = NATS()
         await self.nats_client.connect(self.settings.nats_url)
-        
+
         # Initialize MCP tools
         await self._initialize_tools()
-        
+
         logger.info("Agent orchestrator initialized successfully")
-    
+
     async def _initialize_tools(self):
         """Initialize MCP tools"""
         # Retriever tool
@@ -250,7 +252,7 @@ class AgentOrchestrator:
             },
             "required": ["query", "lang", "tenant"]
         }
-        
+
         retriever_output_schema = {
             "type": "object",
             "properties": {
@@ -260,14 +262,14 @@ class AgentOrchestrator:
             },
             "required": ["results", "metadata", "cost"]
         }
-        
+
         self.tools["retriever.mcp"] = MCPTool(
             "retriever.mcp",
             self.settings.retriever_url,
             retriever_input_schema,
             retriever_output_schema
         )
-        
+
         # Evaluator tool
         evaluator_input_schema = {
             "type": "object",
@@ -281,7 +283,7 @@ class AgentOrchestrator:
             },
             "required": ["lang", "tenant", "query", "answer", "contexts"]
         }
-        
+
         evaluator_output_schema = {
             "type": "object",
             "properties": {
@@ -291,14 +293,14 @@ class AgentOrchestrator:
             },
             "required": ["results", "overall_score", "passed"]
         }
-        
+
         self.tools["evaluator.ragas.mcp"] = MCPTool(
             "evaluator.ragas.mcp",
             self.settings.evaluator_url,
             evaluator_input_schema,
             evaluator_output_schema
         )
-    
+
     async def close(self):
         """Close all connections"""
         if self.db_pool:
@@ -307,11 +309,11 @@ class AgentOrchestrator:
             await self.redis_client.close()
         if self.nats_client:
             await self.nats_client.close()
-        
+
         # Close tool clients
         for tool in self.tools.values():
             await tool.close()
-    
+
     async def start_session(
         self,
         query: str,
@@ -322,10 +324,10 @@ class AgentOrchestrator:
         max_steps: int = 10
     ) -> AgentSession:
         """Start a new agent session"""
-        
+
         session_id = str(uuid.uuid4())
         trace_id = uuid.uuid4().hex
-        
+
         session = AgentSession(
             session_id=session_id,
             tenant=tenant,
@@ -336,18 +338,18 @@ class AgentOrchestrator:
             max_steps=max_steps,
             trace_id=trace_id
         )
-        
+
         # Store session in database
         async with self.db_pool.acquire() as conn:
             await conn.execute("""
-                INSERT INTO agent_sessions 
+                INSERT INTO agent_sessions
                 (session_id, tenant, user_id, query, lang, token_budget, max_steps, status, trace_id)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             """, session_id, tenant, user_id, query, lang, token_budget, max_steps, SessionStatus.ACTIVE, trace_id)
-        
+
         logger.info("Agent session started", session_id=session_id, query=query, lang=lang)
         return session
-    
+
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
     async def invoke_tool(
         self,
@@ -357,13 +359,13 @@ class AgentOrchestrator:
         traceparent: str
     ) -> Dict[str, Any]:
         """Invoke an MCP tool"""
-        
+
         if tool_name not in self.tools:
             raise ValueError(f"Unknown tool: {tool_name}")
-        
+
         tool = self.tools[tool_name]
         step_id = str(uuid.uuid4())
-        
+
         # Create step record
         step = AgentStep(
             step_id=step_id,
@@ -373,67 +375,67 @@ class AgentOrchestrator:
             input_data=input_data,
             status=StepStatus.RUNNING
         )
-        
+
         # Store step in database
         async with self.db_pool.acquire() as conn:
             await conn.execute("""
-                INSERT INTO agent_steps 
+                INSERT INTO agent_steps
                 (step_id, session_id, step_number, tool_name, input_data, status)
                 VALUES ($1, $2, $3, $4, $5, $6)
             """, step_id, session_id, 0, tool_name, json.dumps(input_data), StepStatus.RUNNING)
-        
+
         start_time = datetime.utcnow()
-        
+
         try:
             # Invoke tool
             output_data = await tool.invoke(input_data)
-            
+
             # Calculate cost (simplified)
             cost = 0.001  # Base cost per tool invocation
-            
+
             # Update step
             duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
-            
+
             async with self.db_pool.acquire() as conn:
                 await conn.execute("""
-                    UPDATE agent_steps 
+                    UPDATE agent_steps
                     SET output_data = $1, status = $2, cost = $3, duration_ms = $4, completed_at = NOW()
                     WHERE step_id = $5
                 """, json.dumps(output_data), StepStatus.COMPLETED, cost, duration_ms, step_id)
-            
-            logger.info("Tool invoked successfully", 
+
+            logger.info("Tool invoked successfully",
                        tool_name=tool_name, session_id=session_id, duration_ms=duration_ms)
-            
+
             return output_data
-            
+
         except Exception as e:
             # Update step with error
             async with self.db_pool.acquire() as conn:
                 await conn.execute("""
-                    UPDATE agent_steps 
+                    UPDATE agent_steps
                     SET status = $1, error_message = $2, completed_at = NOW()
                     WHERE step_id = $3
                 """, StepStatus.FAILED, str(e), step_id)
-            
-            logger.error("Tool invocation failed", 
+
+            logger.error("Tool invocation failed",
                         tool_name=tool_name, session_id=session_id, error=str(e))
             raise
-    
+
     async def execute_agent_loop(self, session: AgentSession) -> AgentSession:
         """Execute the agent decision loop"""
-        
+
         with tracer.start_as_current_span("execute_agent_loop") as span:
             span.set_attribute("session_id", session.session_id)
             span.set_attribute("query", session.query)
             span.set_attribute("lang", session.lang)
-            
+
             current_query = session.query
             step_number = 0
-            
+
             try:
                 while step_number < session.max_steps:
                     step_number += 1
-                    
+
                     # Step 1: Retrieve relevant documents
                     retrieval_input = {
                         "query": current_query,
@@ -442,14 +444,14 @@ class AgentOrchestrator:
                         "k_final": 5,
                         "rerank": True
                     }
-                    
+
                     retrieval_result = await self.invoke_tool(
                         session.session_id,
                         "retriever.mcp",
                         retrieval_input,
                         session.trace_id or ""
                     )
-                    
+
                     # Extract contexts and citations
                     contexts = [r["content"] for r in retrieval_result["results"]]
                     citations = [
@@ -460,10 +462,10 @@ class AgentOrchestrator:
                         }
                         for r in retrieval_result["results"]
                     ]
-                    
+
                     # Step 2: Generate answer (simplified - in real implementation, use LLM)
                     answer = self._generate_answer(current_query, contexts, session.lang)
-                    
+
                     # Step 3: Evaluate the response
                     evaluation_input = {
                         "lang": session.lang,
@@ -473,14 +475,14 @@ class AgentOrchestrator:
                         "contexts": contexts,
                         "metrics": ["faithfulness", "answer_relevancy"]
                     }
-                    
+
                     evaluation_result = await self.invoke_tool(
                         session.session_id,
                         "evaluator.ragas.mcp",
                         evaluation_input,
                         session.trace_id or ""
                     )
-                    
+
                     # Check if we should continue or stop
                     if evaluation_result["passed"] and evaluation_result["overall_score"] > 0.8:
                         # Good enough, stop here
@@ -492,44 +494,44 @@ class AgentOrchestrator:
                         # Need to refine, continue loop
                         current_query = f"Refine the answer for: {session.query}"
                         continue
-                
+
                 # Update session
                 session.completed_at = datetime.utcnow()
-                
+
                 async with self.db_pool.acquire() as conn:
                     await conn.execute("""
-                        UPDATE agent_sessions 
+                        UPDATE agent_sessions
                         SET status = $1, final_response = $2, citations = $3, completed_at = $4
                         WHERE session_id = $5
-                    """, session.status, session.final_response, json.dumps(session.citations), 
+                    """, session.status, session.final_response, json.dumps(session.citations),
                         session.completed_at, session.session_id)
-                
-                logger.info("Agent session completed", 
+
+                logger.info("Agent session completed",
                            session_id=session.session_id, status=session.status)
-                
+
                 return session
-                
+
             except Exception as e:
                 # Mark session as failed
                 session.status = SessionStatus.FAILED
                 session.completed_at = datetime.utcnow()
-                
+
                 async with self.db_pool.acquire() as conn:
                     await conn.execute("""
-                        UPDATE agent_sessions 
+                        UPDATE agent_sessions
                         SET status = $1, completed_at = $2
                         WHERE session_id = $3
                     """, session.status, session.completed_at, session.session_id)
-                
-                logger.error("Agent session failed", 
+
+                logger.error("Agent session failed",
                             session_id=session.session_id, error=str(e))
                 raise
-    
+
     def _generate_answer(self, query: str, contexts: List[str], lang: str) -> str:
         """Generate answer from query and contexts (simplified)"""
         # In a real implementation, this would use an LLM
         context_text = " ".join(contexts[:3])  # Use top 3 contexts
-        
+
         if lang == "fa":
             return f"بر اساس اطلاعات موجود: {context_text[:500]}..."
         else:
@@ -610,7 +612,7 @@ async def start_agent_session(
     background_tasks: BackgroundTasks = BackgroundTasks()
 ):
     """Start a new agent session"""
-    
+
     try:
         session = await orchestrator.start_session(
             query=query,
@@ -620,23 +622,23 @@ async def start_agent_session(
             token_budget=token_budget,
             max_steps=max_steps
         )
-        
+
         # Start agent loop in background
         background_tasks.add_task(orchestrator.execute_agent_loop, session)
-        
+
         agent_session_counter.labels(
             tenant=tenant,
             lang=lang,
             status="started"
         ).inc()
-        
+
         return {
             "session_id": session.session_id,
             "status": session.status,
             "trace_id": session.trace_id,
             "created_at": session.created_at.isoformat()
         }
-        
+
     except Exception as e:
         logger.error("Failed to start agent session", error=str(e))
         agent_session_counter.labels(
@@ -656,10 +658,10 @@ async def get_session_status(session_id: str):
             FROM agent_sessions
             WHERE session_id = $1
         """, session_id)
-        
+
         if not result:
             raise HTTPException(status_code=404, detail="Session not found")
-        
+
         return {
             "session_id": result["session_id"],
             "status": result["status"],
@@ -676,13 +678,13 @@ async def get_session_steps(session_id: str):
     """Get agent session steps"""
     async with orchestrator.db_pool.acquire() as conn:
         results = await conn.fetch("""
-            SELECT step_id, step_number, tool_name, input_data, output_data, status, 
+            SELECT step_id, step_number, tool_name, input_data, output_data, status,
                    error_message, cost, duration_ms, created_at, completed_at
             FROM agent_steps
             WHERE session_id = $1
             ORDER BY step_number ASC
         """, session_id)
-        
+
         return [
             {
                 "step_id": r["step_id"],

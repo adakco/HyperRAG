@@ -22,6 +22,7 @@ from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.resources import Resource, SERVICE_NAME
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
@@ -63,7 +64,8 @@ structlog.configure(
 logger = structlog.get_logger()
 
 # Configure OpenTelemetry
-trace.set_tracer_provider(TracerProvider())
+resource = Resource.create(attributes={SERVICE_NAME: "hyperrag-normalizer"})
+trace.set_tracer_provider(TracerProvider(resource=resource))
 tracer = trace.get_tracer(__name__)
 
 otlp_exporter = OTLPSpanExporter(endpoint="http://192.168.2.23:4317", insecure=True)
@@ -105,7 +107,7 @@ class Settings(BaseSettings):
     minio_bucket: str = "clean"
     service_name: str = "normalizer"
     log_level: str = "INFO"
-    
+
     class Config:
         env_file = ".env"
 
@@ -124,7 +126,7 @@ class NormalizationResult(BaseModel):
 
 class TextNormalizer:
     """Text normalization utilities"""
-    
+
     def __init__(self):
         self.analyzer = None
         self.anonymizer = None
@@ -140,81 +142,81 @@ class TextNormalizer:
                 logger.warning(f"Failed to initialize PII engines: {e}")
                 self.analyzer = None
                 self.anonymizer = None
-    
+
     def normalize_persian_text(self, text: str) -> str:
         """Normalize Persian text"""
         if not self.persian_normalizer:
             logger.warning("Persian normalizer not available, using basic normalization")
             return self._basic_persian_normalization(text)
-        
+
         try:
             # Normalize Persian text using Hazm
             normalized = self.persian_normalizer.normalize(text)
-            
+
             # Additional Persian-specific normalizations
             normalized = self._persian_specific_normalizations(normalized)
-            
+
             return normalized
         except Exception as e:
             logger.error("Persian normalization failed", error=str(e))
             return self._basic_persian_normalization(text)
-    
+
     def _basic_persian_normalization(self, text: str) -> str:
         """Basic Persian text normalization without Hazm"""
         # Remove extra whitespace
         text = re.sub(r'\s+', ' ', text)
-        
+
         # Normalize Persian digits
         persian_digits = '۰۱۲۳۴۵۶۷۸۹'
         english_digits = '0123456789'
         for p, e in zip(persian_digits, english_digits):
             text = text.replace(p, e)
-        
+
         # Normalize Persian punctuation
         text = text.replace('،', ',')
         text = text.replace('؛', ';')
         text = text.replace('؟', '?')
         text = text.replace('«', '"')
         text = text.replace('»', '"')
-        
+
         return text.strip()
-    
+
     def _persian_specific_normalizations(self, text: str) -> str:
         """Persian-specific text normalizations"""
         # Remove kashida (ـ)
         text = text.replace('ـ', '')
-        
+
         # Normalize different forms of alef
         text = text.replace('أ', 'ا')
         text = text.replace('إ', 'ا')
         text = text.replace('آ', 'ا')
-        
+
         # Normalize different forms of yeh
         text = text.replace('ي', 'ی')
         text = text.replace('ئ', 'ی')
-        
+
         # Normalize different forms of teh
         text = text.replace('ة', 'ه')
-        
+
         return text
-    
+
     def normalize_english_text(self, text: str) -> str:
         """Normalize English text"""
         # Remove extra whitespace
         text = re.sub(r'\s+', ' ', text)
-        
+
         # Normalize quotes
         text = text.replace('"', '"').replace('"', '"')
         text = text.replace(''', "'").replace(''', "'")
-        
+
         # Normalize dashes
         text = text.replace('–', '-').replace('—', '-')
-        
+
         # Remove control characters
         text = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', text)
-        
+
         return text.strip()
-    
+
     def detect_and_anonymize_pii(self, text: str, lang: str) -> Tuple[str, List[Dict]]:
         """Detect and anonymize PII in text"""
         # Initialize PII engines if needed
@@ -232,14 +234,14 @@ class TextNormalizer:
         else:
             # English PII entities
             entities = ['PERSON', 'PHONE_NUMBER', 'EMAIL_ADDRESS', 'CREDIT_CARD', 'SSN', 'IBAN_CODE']
-        
+
         # Analyze text for PII
         results = self.analyzer.analyze(
             text=text,
             entities=entities,
             language=lang
         )
-        
+
         # Convert results to list of dicts
         pii_entities = []
         for result in results:
@@ -250,19 +252,19 @@ class TextNormalizer:
                 'score': result.score,
                 'text': text[result.start:result.end]
             })
-        
+
         # Anonymize the text
         anonymized_text = self.anonymizer.anonymize(
             text=text,
             analyzer_results=results
         ).text
-        
+
         return anonymized_text, pii_entities
 
 
 class NormalizerService:
     """Main normalizer service class"""
-    
+
     def __init__(self, settings: Settings):
         self.settings = settings
         self.db_pool: Optional[asyncpg.Pool] = None
@@ -270,7 +272,7 @@ class NormalizerService:
         self.nats_client: Optional[NATS] = None
         self.s3_client = None
         self.text_normalizer = TextNormalizer()
-        
+
     async def initialize(self):
         """Initialize database connections and clients"""
         # Database connection pool
@@ -279,14 +281,14 @@ class NormalizerService:
             min_size=5,
             max_size=20
         )
-        
+
         # Redis client
         self.redis_client = redis.from_url(self.settings.redis_url)
-        
+
         # NATS client
         self.nats_client = NATS()
         await self.nats_client.connect(self.settings.nats_url)
-        
+
         # S3/MinIO client
         endpoint_url = self.settings.minio_endpoint
         if not endpoint_url.startswith('http'):
@@ -300,7 +302,7 @@ class NormalizerService:
             region_name='us-east-1',
             use_ssl=False
         )
-        
+
         # Ensure bucket exists
         try:
             self.s3_client.head_bucket(Bucket=self.settings.minio_bucket)
@@ -312,9 +314,9 @@ class NormalizerService:
             except Exception as create_error:
                 logger.warning(f"Could not create bucket {self.settings.minio_bucket}: {create_error}")
                 # Continue without bucket creation
-            
+
         logger.info("Normalizer service initialized successfully")
-    
+
     async def start_nats_listener(self):
         """Start NATS event listener"""
         try:
@@ -323,7 +325,7 @@ class NormalizerService:
             logger.info("NATS listener started for document ingestion events")
         except Exception as e:
             logger.error("Failed to start NATS listener", error=str(e))
-    
+
     async def handle_document_ingested(self, msg):
         """Handle document ingestion events"""
         try:
@@ -334,12 +336,12 @@ class NormalizerService:
             uri_raw = event_data["data"]["uri_raw"]
             lang = event_data["data"].get("lang", "en")
             tenant = event_data["data"].get("tenant", "default")
-            
+
             logger.info(f"Processing document ingestion event: {doc_id}")
-            
+
             # Process the document
             result = await self.normalize_document(doc_id, version, uri_raw, lang, tenant)
-            
+
             # Publish normalization complete event
             event = {
                 "specversion": "1.0",
@@ -355,7 +357,7 @@ class NormalizerService:
                     "tenant": str(tenant)
                 }
             }
-            
+
             # Publish event
             event_message = json.dumps(event, default=str)
             if isinstance(event_message, str):
@@ -363,12 +365,12 @@ class NormalizerService:
             else:
                 event_message_bytes = str(event_message).encode('utf-8')
             await self.nats_client.publish("doc.normalized.v1", event_message_bytes)
-            
+
             logger.info(f"Document normalized and event published: {doc_id}")
-            
+
         except Exception as e:
             logger.error("Failed to handle document ingestion event", error=str(e))
-    
+
     async def close(self):
         """Close all connections"""
         if self.db_pool:
@@ -377,7 +379,7 @@ class NormalizerService:
             await self.redis_client.close()
         if self.nats_client:
             await self.nats_client.close()
-    
+
     async def normalize_document(
         self,
         doc_id: str,
@@ -387,40 +389,40 @@ class NormalizerService:
         tenant: str
     ) -> NormalizationResult:
         """Normalize a document"""
-        
+
         with tracer.start_as_current_span("normalize_document") as span:
             span.set_attribute("doc_id", doc_id)
             span.set_attribute("version", version)
             span.set_attribute("lang", lang)
             span.set_attribute("tenant", tenant)
-            
+
             start_time = datetime.utcnow()
-            
+
             # Download document from S3
             bucket_name = uri_raw.split('/')[2]  # Extract bucket from s3://bucket/key
             key = '/'.join(uri_raw.split('/')[3:])  # Extract key
-            
+
             response = self.s3_client.get_object(Bucket=bucket_name, Key=key)
             raw_content = response['Body'].read().decode('utf-8')
-            
+
             # Normalize text based on language
             if lang == 'fa':
                 normalized_text = self.text_normalizer.normalize_persian_text(raw_content)
             else:
                 normalized_text = self.text_normalizer.normalize_english_text(raw_content)
-            
+
             # Detect and anonymize PII
             anonymized_text, pii_entities = self.text_normalizer.detect_and_anonymize_pii(
                 normalized_text, lang
             )
-            
+
             # Count tokens (simple approximation)
             token_count = len(anonymized_text.split())
-            
+
             # Upload normalized document to S3
             clean_key = f"{tenant}/clean/{doc_id}/{version}"
             uri_clean = f"s3://{self.settings.minio_bucket}/{clean_key}"
-            
+
             self.s3_client.put_object(
                 Bucket=self.settings.minio_bucket,
                 Key=clean_key,
@@ -434,15 +436,15 @@ class NormalizerService:
                     'pii_entities_count': str(len(pii_entities))
                 }
             )
-            
+
             # Update database
             async with self.db_pool.acquire() as conn:
                 await conn.execute("""
-                    UPDATE document_versions 
+                    UPDATE document_versions
                     SET uri_clean = $1, processing_status = 'normalized'
                     WHERE doc_id = $2 AND version = $3
                 """, uri_clean, doc_id, int(version))
-            
+
             # Update metrics
             for entity in pii_entities:
                 pii_detection_counter.labels(
@@ -450,9 +452,9 @@ class NormalizerService:
                     lang=lang,
                     entity_type=entity['entity_type']
                 ).inc()
-            
+
             processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
-            
+
             # Create CloudEvent
             event = {
                 "specversion": "1.0",
@@ -473,7 +475,7 @@ class NormalizerService:
                     "processing_time_ms": int(processing_time)
                 }
             }
-            
+
             # Publish event to NATS
             event_data = json.dumps({
                 "specversion": event["specversion"],
@@ -484,12 +486,12 @@ class NormalizerService:
                 "datacontenttype": event["datacontenttype"],
                 "data": event["data"]
             })
-            
+
             await self.nats_client.publish("doc.normalized.v1", str(event_data).encode())
-            
-            logger.info("Document normalized successfully", 
+
+            logger.info("Document normalized successfully",
                        doc_id=doc_id, version=version, pii_count=len(pii_entities))
-            
+
             return NormalizationResult(
                 doc_id=doc_id,
                 version=version,
@@ -530,7 +532,7 @@ FastAPIInstrumentor.instrument_app(app)
 async def startup_event():
     """Initialize service on startup"""
     await normalizer_service.initialize()
-    
+
     # Start NATS listener
     await normalizer_service.start_nats_listener()
 
@@ -549,7 +551,7 @@ async def normalize_document(
     tenant: str
 ):
     """Normalize a document"""
-    
+
     with normalization_duration.labels(
         tenant=tenant,
         lang=lang,
@@ -559,14 +561,14 @@ async def normalize_document(
             result = await normalizer_service.normalize_document(
                 doc_id, version, uri_raw, lang, tenant
             )
-            
+
             normalization_counter.labels(
                 tenant=tenant,
                 lang=lang,
                 content_type="text/plain",
                 status="success"
             ).inc()
-            
+
             return result
         except Exception as e:
             logger.error("Document normalization failed", error=str(e), doc_id=doc_id)

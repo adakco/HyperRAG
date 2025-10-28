@@ -1,0 +1,10 @@
+.DS_Store
+__pycache__/
+*.log
+*.pyc
+.env
+test.tar
+test.zip
+*.dbm
+test_shelve
+test_dbm
