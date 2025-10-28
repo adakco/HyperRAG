@@ -468,35 +468,79 @@ Query + Answer + Contexts → Evaluator → Quality Metrics
 
 ## معرفی
 
-Agent-Orch سرویس ارکستراسیون agent workflows است.
+Agent-Orch سرویس ارکستراسیون agent workflows به صورت MCP-Native است که agent sessions را مدیریت می‌کند.
 
 ### معماری
 
 ```
-Query → Agent-Orch → Tool Selection → Tool Execution → Response
+Query → Start Session → Background Processing → MCP Tools → Store Results
 ```
 
 ### وظایف
 
-1. دریافت query از user
-2. انتخاب tools مناسب
-3. اجرای tools به ترتیب
-4. جمع‌آوری نتایج
+1. ایجاد agent session
+2. اجرای agent loop در background
+3. فراخوانی MCP tools (retriever, evaluator)
+4. جمع‌آوری و ذخیره نتایج
 5. تولید پاسخ نهایی
+
+### پارامترهای پیکربندی
+
+- **Max Steps**: 10
+- **Max Cost**: 0.01
+- **Timeout**: 300 seconds
+- **LLM Model**: deepseek/deepseek-chat (OpenRouter)
+- **Tools**: retriever.mcp, evaluator.ragas.mcp
 
 ## API Endpoints
 
-### POST /agent/query
+### POST /sessions
+
+شروع یک agent session جدید
+
+**Input (Form Data):**
+
+```
+query: string          # سوال اولیه (الزامی)
+lang: string           # "en" یا "fa" (الزامی)
+tenant: string         # tenant ID (الزامی)
+user_id: string        # user ID (اختیاری)
+token_budget: integer  # بودجه توکن (پیش‌فرض: 4000)
+max_steps: integer     # حداکثر گام‌ها (پیش‌فرض: 10)
+```
+
+**Output:**
+
+```json
+{
+  "session_id": "uuid-...",
+  "status": "active",
+  "trace_id": "00-...",
+  "created_at": "2025-10-27T10:30:00Z"
+}
+```
+
+**Example:**
+
+```bash
+curl -X POST "http://localhost:8006/sessions" \
+  -F "query=What is Python programming?" \
+  -F "lang=en" \
+  -F "tenant=mycompany" \
+  -F "user_id=user123"
+```
+
+### POST /session/start
+
+شروع session با فرمت JSON (برای testing)
 
 **Input (JSON):**
 
 ```json
 {
-  "query": "What is Python?",
+  "initial_query": "What is Python?",
   "tenant": "mycompany",
-  "lang": "en",
-  "tools": ["retriever", "graph", "memory"],
-  "max_steps": 10
+  "user_id": "user123"
 }
 ```
 
@@ -504,15 +548,51 @@ Query → Agent-Orch → Tool Selection → Tool Execution → Response
 
 ```json
 {
-  "session_id": "...",
-  "query": "...",
-  "response": "Python is...",
-  "steps": [
-    {"tool": "retriever", "result": "..."},
-    {"tool": "graph", "result": "..."}
-  ],
-  "total_cost": 0.0012
+  "session_id": "uuid-...",
+  "status": "started",
+  "message": "Agent session started successfully"
 }
+```
+
+### GET /sessions/{session_id}
+
+دریافت وضعیت agent session
+
+**Output:**
+
+```json
+{
+  "session_id": "uuid-...",
+  "status": "completed",
+  "final_response": "Python is a high-level programming language...",
+  "citations": [...],
+  "total_cost": 0.0012,
+  "created_at": "2025-10-27T10:30:00Z",
+  "completed_at": "2025-10-27T10:31:45Z"
+}
+```
+
+### GET /sessions/{session_id}/steps
+
+دریافت لیست steps یک session
+
+**Output:**
+
+```json
+[
+  {
+    "step_id": "uuid-...",
+    "step_number": 1,
+    "tool_name": "retriever.mcp",
+    "input_data": {"query": "...", "lang": "en"},
+    "output_data": {"results": [...]},
+    "status": "completed",
+    "cost": 0.0001,
+    "duration_ms": 234,
+    "created_at": "2025-10-27T10:30:01Z",
+    "completed_at": "2025-10-27T10:30:01Z"
+  }
+]
 ```
 
 ---
