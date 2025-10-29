@@ -19,6 +19,6 @@ sentence-transformers==2.2.2
 transformers==4.35.2
 torch==2.1.1
 hazm==0.7.0
-cross-encoder==0.0.7
+cross-encoder==0.0.6
 spacy==3.7.2
 mcp==0.1.0
