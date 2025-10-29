@@ -9,23 +9,16 @@ redis==5.0.1
 cloudevents==1.10.1
 opentelemetry-api==1.21.0
 opentelemetry-sdk==1.21.0
-opentelemetry-instrumentation-fastapi==0.42b0
+opentelemetry-instrumentation-fastapi fungal==0.42b0
 opentelemetry-instrumentation-asyncpg==0.42b0
 opentelemetry-exporter-otlp==1.21.0
 prometheus-client==0.19.0
 structlog==23.2.0
 aiofiles==23.2.1
 httpx==0.25.2
-python-multipart==0.0.6
-# Text processing libraries
 spacy==3.7.2
+tiktoken==0.5.2
+hazm==0.7.0
+Pillow==10.1.0
 presidio-analyzer==2.2.33
 presidio-anonymizer==2.2.33
-# Persian text processing
-hazm==0.7.0
-# PDF processing
-PyPDF2==3.0.1
-python-docx==1.1.0
-# Image processing for OCR
-Pillow==10.1.0
-pytesseract==0.3.10

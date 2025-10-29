@@ -16,13 +16,9 @@ prometheus-client==0.19.0
 structlog==23.2.0
 aiofiles==23.2.1
 httpx==0.25.2
-# Embedding models
 sentence-transformers==2.2.2
 transformers==4.35.2
 torch==2.1.1
-# Persian embeddings
 hazm==0.7.0
-# Vector database
 qdrant-client==1.7.0
-# Text processing
 spacy==3.7.2

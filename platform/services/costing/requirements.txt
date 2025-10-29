@@ -14,10 +14,6 @@ opentelemetry-exporter-otlp==1.21.0
 prometheus-client==0.19.0
 structlog==23.2.0
 httpx==0.25.2
-# Cost calculation
 numpy==1.24.3
 pandas==2.1.3
-# Async utilities
 asyncio-throttle==1.0.2
-# Decimal precision
-decimal==1.70
