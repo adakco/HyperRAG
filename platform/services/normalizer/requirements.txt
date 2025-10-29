@@ -9,7 +9,7 @@ redis==5.0.1
 cloudevents==1.10.1
 opentelemetry-api==1.21.0
 opentelemetry-sdk==1.21.0
-opentelemetry-instrumentation-fastapi fungal==0.42b0
+opentelemetry-instrumentation-fastapi==0.42b0
 opentelemetry-instrumentation-asyncpg==0.42b0
 opentelemetry-exporter-otlp==1.21.0
 prometheus-client==0.19.0
