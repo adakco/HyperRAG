@@ -36,5 +36,6 @@ protobuf>=5.29.3,<6.0.0
 aiofiles==23.2.1
 
 # ML Dependencies
-torch==2.1.1
+torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu
+torchvision==0.17.2 --index-url https://download.pytorch.org/whl/cpu
 spacy>=3.7.2
