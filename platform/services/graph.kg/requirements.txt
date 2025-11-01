@@ -1,13 +1,23 @@
+# Core
 fastapi>=0.111.0
 uvicorn[standard]>=0.31.1
 pydantic>=2.11.0,<3.0.0
 pydantic-settings>=2.5.2
+
+# Infrastructure
 neo4j==5.15.0
+
+# NLP & AI
+nltk>=3.8
+
+# Observability
 opentelemetry-api>=1.27.0
 opentelemetry-sdk>=1.27.0
 opentelemetry-instrumentation-fastapi>=0.48b0
 opentelemetry-exporter-otlp>=1.27.0
 prometheus-client==0.19.0
+
+# Utils
 structlog==23.2.0
-spacy==3.7.2
 protobuf>=5.29.3,<6.0.0
+spacy>=3.7.2

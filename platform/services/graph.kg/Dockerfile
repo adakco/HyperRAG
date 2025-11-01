@@ -6,8 +6,19 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        gcc \
+        g++ \
+        make \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt && \
+RUN pip install --no-cache-dir cryptography==42.0.8 pyOpenSSL==24.0.0 urllib3==1.26.18 && \
+    pip install --no-cache-dir boto3 botocore && \
+    pip install --no-cache-dir -r requirements.txt && \
     python -m spacy download en_core_web_sm || true
 
 COPY . .
@@ -15,5 +26,3 @@ COPY . .
 EXPOSE 8012
 
 CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8012"]
-
-
