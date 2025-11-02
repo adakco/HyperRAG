@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PORT=8009
+    PORT=8001
 
 WORKDIR /app
 
@@ -22,6 +22,6 @@ RUN pip install --no-cache-dir cryptography==42.0.8 pyOpenSSL==24.0.0 urllib3==1
 
 COPY . .
 
-EXPOSE 8009
+EXPOSE 8001
 
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8009"]
+CMD python -m uvicorn main:app --host 0.0.0.0 --port ${PORT}
